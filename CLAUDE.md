@@ -61,8 +61,10 @@ rooftop installations.
 3. Update `README.md`.
 4. Make small logical commits on `development` using Conventional Commits
    (`feat:`, `fix:`, `docs:`, `chore:`, `test:`). Several per step, not one.
-5. Push `development` to `origin`.
-6. Merge into `main` with a merge commit:
+5. Do not push and do not merge. The user pushes and merges themselves. Give
+   them the commands for steps 6 and 7, filled in for this step.
+6. The user pushes `development`: `git push origin development`
+7. The user merges into `main` with a merge commit:
    ```
    git checkout main
    git pull
@@ -72,6 +74,6 @@ rooftop installations.
    ```
    Never squash, rebase or force push. The individual commits must stay visible in
    main's history.
-7. Give the user a short plain-English explanation of what was built, the design
+8. Give the user a short plain-English explanation of what was built, the design
    decisions and which guideline each one follows, and 3 viva questions they
    should be able to answer about it.
