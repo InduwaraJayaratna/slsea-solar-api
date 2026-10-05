@@ -13,7 +13,8 @@
     "dev": "echo \"dev: no server yet, added when the API is built\"",
     "test": "node --test",
     "lint": "eslint .",
-    "seed:generate": "node scripts/generate-seed.js"
+    "seed:generate": "node scripts/generate-seed.js",
+    "seed:validate": "node scripts/validate-seed.js"
   },
   "author": "Induwara Jayaratna",
   "license": "UNLICENSED",
