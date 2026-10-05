@@ -14,7 +14,7 @@ rooftop installations report, both as they arrive (real-time) and over time
 ## Stack
 
 - Node.js 22 (see `.nvmrc`), CommonJS
-- Express 5 (added with the first endpoint)
+- Express 5, with morgan (request logs) and dotenv (`.env` loading)
 - JSON only; `snake_case` fields and query parameters; ISO 8601 UTC timestamps
 - Layering: routes -> controllers -> services -> repositories
 - Tests: `node:test` + `supertest`
@@ -36,13 +36,74 @@ Requirements: Node.js 22 (`nvm use` picks it up from `.nvmrc`).
 
 ```sh
 npm install
+npm start      # start the API on http://localhost:3000
+npm run dev    # same, restarting on file changes (nodemon)
 npm run lint   # ESLint
-npm test       # node:test: runs the tests in tests/, including the seed validator
+npm test       # node:test + supertest: everything in tests/, including the seed validator
 ```
 
-`npm start` and `npm run dev` are placeholders until the server is added.
+Then try `curl http://localhost:3000/api/v1/health`.
 
-Configuration: copy `.env.example` to `.env` and fill in values (none are needed yet).
+Configuration: copy `.env.example` to `.env` if you want to change a default. Every
+setting is optional:
+
+| Variable      | Default       | Meaning                                                     |
+| ------------- | ------------- | ----------------------------------------------------------- |
+| `NODE_ENV`    | `development` | `test` turns off request logging                            |
+| `PORT`        | `3000`        | port the server listens on                                  |
+| `DATA_SOURCE` | `memory`      | where repositories read from (`memory` = `data/seed/` JSON) |
+| `BODY_LIMIT`  | `100kb`       | largest JSON request body accepted                          |
+
+## Project structure
+
+```
+src/
+  app.js            builds the Express app (no listening; tests use it directly)
+  server.js         starts the server on PORT
+  config/           settings from environment variables
+  routes/           URL + method -> controller; index.js mounts everything under /api/v1
+  controllers/      HTTP in and out
+  services/         business rules, no HTTP
+  repositories/     the only code that touches data; index.js picks one by DATA_SOURCE
+    memory/         loads data/seed/ once and indexes it
+  middleware/       request id, logging, content negotiation, 404, errors
+  utils/            AppError
+tests/              node:test + supertest
+scripts/            seed generator and validator
+data/seed/          seed JSON, one array per collection
+```
+
+## API
+
+Base path: `/api/v1`. The API speaks JSON only.
+
+| Method | Path             | Description                                                  |
+| ------ | ---------------- | ------------------------------------------------------------ |
+| GET    | `/api/v1/health` | status, version, data source and record count per collection |
+
+Every response has an `X-Request-Id` header (a caller's own id is reused if it is
+safe), which also appears in the server log line for that request.
+
+### Errors
+
+Every error uses the same body:
+
+```json
+{ "error": { "code": "NOT_FOUND", "message": "No resource at GET /api/v1/nope", "details": [] } }
+```
+
+`code` is stable, so programs can check it. `message` is for people. `details` lists
+specifics (for example, one entry per invalid field) and is otherwise empty.
+
+| Status | Code                     | When                                                              |
+| ------ | ------------------------ | ----------------------------------------------------------------- |
+| 400    | `BAD_REQUEST`            | request is invalid, e.g. the body is not valid JSON               |
+| 404    | `NOT_FOUND`              | no route at that path                                             |
+| 405    | `METHOD_NOT_ALLOWED`     | path exists but not for this method; `Allow` header lists methods |
+| 406    | `NOT_ACCEPTABLE`         | `Accept` header rules out `application/json`                      |
+| 413    | `PAYLOAD_TOO_LARGE`      | body bigger than `BODY_LIMIT`                                     |
+| 415    | `UNSUPPORTED_MEDIA_TYPE` | POST/PUT/PATCH body that is not `application/json`                |
+| 500    | `INTERNAL_ERROR`         | unexpected error; details are logged, never returned              |
 
 ## Data model and seed data
 
@@ -78,10 +139,11 @@ is git-ignored.
 
 ## Project status
 
-| Step | Title                    | Status |
-| ---- | ------------------------ | ------ |
-| 1    | Project bootstrap        | Done   |
-| 2    | Data model and seed data | Done   |
+| Step | Title                               | Status |
+| ---- | ----------------------------------- | ------ |
+| 1    | Project bootstrap                   | Done   |
+| 2    | Data model and seed data            | Done   |
+| 3    | Express skeleton and error contract | Done   |
 
 ## AI disclosure
 
