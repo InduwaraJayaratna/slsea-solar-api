@@ -84,3 +84,37 @@ Summary of what was generated:
 - `docs/data-model.md`: domain model with a Mermaid ER diagram and the justified modelling decisions (no Device entity, append-only readings, denormalised jurisdiction ids).
 - `scripts/generate-seed.js`: deterministic seed generator writing 9 provinces, 25 districts, 30 substations, 200 installations, 131,027 readings and 37 users to `data/seed/`, plus `docs/demo-credentials.md`.
 - `scripts/validate-seed.js` and `tests/seed.test.js`: checks for scale, unique ids, foreign keys and meter totals, run by `npm test`.
+
+## Step 3 - Express skeleton and error contract
+
+Date: 2026-10-06
+
+Prompt:
+
+```text
+Step 3 - Express application skeleton on top of the seed JSON. No domain endpoints yet except /health.
+
+1. Install express (v5), morgan and dotenv, plus dev tools supertest and nodemon. Structure:
+   src/app.js (builds and exports the Express app, does not listen), src/server.js (listens on PORT), src/config/, src/routes/, src/controllers/, src/services/, src/repositories/, src/middleware/, src/utils/.
+
+2. Data layer: src/repositories/memory/ loads the six files in data/seed/ once at startup, using path.join(__dirname, ...) so it never depends on the working directory, and builds in-memory indexes (by id; readings grouped by installation_id and sorted by timestamp). Expose one repository per entity, selected through src/repositories/index.js from a DATA_SOURCE env var (memory for now). Every repository method must return a Promise even in memory mode, because a MongoDB implementation with the same interface replaces it in a later step.
+
+3. Mount all routes under /api/v1 from a single src/routes/index.js that app.js requires and mounts explicitly.
+
+4. Cross-cutting middleware, in this order: request id, request logging, JSON body parser with a size limit, content negotiation, routes, 404 handler, central error handler.
+   - Content negotiation: a request whose Accept header excludes application/json gets 406; a POST/PUT/PATCH whose Content-Type is not application/json gets 415; malformed JSON gets 400.
+   - One error contract for the whole API: {"error": {"code": "<MACHINE_CODE>", "message": "<human text>", "details": [...]}}. Implement an AppError class with helper constructors (badRequest, unauthorized, forbidden, notFound, methodNotAllowed, notAcceptable, conflict, preconditionFailed, unsupportedMediaType). Unknown routes return 404 in this schema. A known path with an unsupported method returns 405 with an Allow header. Unexpected errors return 500 without leaking a stack trace.
+   - Turn off Express's automatic ETag (app.set('etag', false)); we implement our own in the next step.
+
+5. GET /api/v1/health returns 200 with status, version, data_source and the record count per collection.
+
+6. Tests for health, 404, 405, 406, 415 and malformed JSON, all asserting the error schema.
+
+Then do the step wrap-up as Step 3 - Express skeleton and error contract.
+```
+
+Summary of what was generated:
+
+- Express 5 app (`src/app.js`, `src/server.js`) with config, routes, controllers, services, middleware and utils folders; `GET /api/v1/health` reports status, version, data source and record counts.
+- Memory repositories that load `data/seed/` once, index by id and group readings by installation; all methods async, selected by `DATA_SOURCE`.
+- Middleware for request id, logging, body limit, content negotiation (406/415/400), 404, 405 with Allow, and one error contract via `AppError`; 22 tests.
