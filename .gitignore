@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Secrets and local config
+.env
+*.local.json
+
+# Build and test output
+.aws-sam/
+coverage/
+
+# Coursework reference material (not redistributed)
+docs/reference/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
