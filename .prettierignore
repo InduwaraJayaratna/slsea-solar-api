@@ -1,0 +1,4 @@
+# Generated files: formatted by their generator, not by Prettier.
+data/seed/
+docs/demo-credentials.md
+package-lock.json

@@ -12,7 +12,8 @@
     "start": "echo \"start: no server yet, added when the API is built\"",
     "dev": "echo \"dev: no server yet, added when the API is built\"",
     "test": "node --test",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "seed:generate": "node scripts/generate-seed.js"
   },
   "author": "Induwara Jayaratna",
   "license": "UNLICENSED",
@@ -22,5 +23,8 @@
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.13.0",
     "prettier": "^3.9.9"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
   }
 }
