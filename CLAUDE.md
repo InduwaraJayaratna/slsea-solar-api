@@ -55,14 +55,14 @@ rooftop installations.
 
 ## Step wrap-up (end of every step)
 
-a. Run `npm run lint` and `npm test` and fix any failures.
-b. Append the user's prompt, verbatim, to `docs/ai-prompts.md` under a heading
+1. Run `npm run lint` and `npm test` and fix any failures.
+2. Append the user's prompt, verbatim, to `docs/ai-prompts.md` under a heading
    "Step N - <title>", with today's date and a 3-line summary of what was generated.
-c. Update `README.md`.
-d. Make small logical commits on `development` using Conventional Commits
+3. Update `README.md`.
+4. Make small logical commits on `development` using Conventional Commits
    (`feat:`, `fix:`, `docs:`, `chore:`, `test:`). Several per step, not one.
-e. Push `development` to `origin`.
-f. Merge into `main` with a merge commit:
+5. Push `development` to `origin`.
+6. Merge into `main` with a merge commit:
    ```
    git checkout main
    git pull
@@ -72,6 +72,6 @@ f. Merge into `main` with a merge commit:
    ```
    Never squash, rebase or force push. The individual commits must stay visible in
    main's history.
-g. Give the user a short plain-English explanation of what was built, the design
+7. Give the user a short plain-English explanation of what was built, the design
    decisions and which guideline each one follows, and 3 viva questions they
    should be able to answer about it.
