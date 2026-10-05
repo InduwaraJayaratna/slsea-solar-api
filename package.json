@@ -1,0 +1,26 @@
+{
+  "name": "slsea-solar-api",
+  "version": "0.1.0",
+  "description": "REST API for SLSEA real-time and historical rooftop solar generation data",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "echo \"start: no server yet, added when the API is built\"",
+    "dev": "echo \"dev: no server yet, added when the API is built\"",
+    "test": "node --test",
+    "lint": "eslint ."
+  },
+  "author": "Induwara Jayaratna",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9"
+  }
+}
