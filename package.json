@@ -9,8 +9,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "echo \"start: no server yet, added when the API is built\"",
-    "dev": "echo \"dev: no server yet, added when the API is built\"",
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "test": "node --test",
     "lint": "eslint .",
     "seed:generate": "node scripts/generate-seed.js",
