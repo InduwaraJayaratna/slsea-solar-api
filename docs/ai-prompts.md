@@ -50,3 +50,37 @@ Summary of what was generated:
 - Git repo with `main` and `development` branches, pushed to a private GitHub repo.
 - npm project (Node 22, CommonJS) with ESLint + Prettier, `.editorconfig`, `.nvmrc`, `.env.example`.
 - `CLAUDE.md` standing rules, expanded `README.md`, and this prompt log.
+
+## Step 2 - Data model and seed data
+
+Date: 2026-10-06
+
+Prompt:
+
+```text
+Step 2 - Data model and seed data. No Express code yet.
+
+1. Write docs/data-model.md: the implementation-independent domain model from the brief. Entities: Province, District, GridSubstation, SolarInstallation, GenerationReading, User. Show attributes, keys and relationships (Province 1-* District 1-* GridSubstation 1-* SolarInstallation 1-* GenerationReading) with a Mermaid ER diagram. State and justify the two marked modelling decisions: (a) meter_id and inverter_id are attributes of SolarInstallation, there is no Device entity; (b) GenerationReading is its own append-only time series, never last-value fields on the installation.
+
+2. Write scripts/generate-seed.js (plain Node; bcryptjs is the only dependency) that writes one flat JSON array per collection into data/seed/: provinces.json, districts.json, substations.json, installations.json, readings.json, users.json. Flat per-collection arrays, not one nested object. Requirements:
+   - Deterministic: use a seeded pseudo-random generator so the same command gives the same data. Accept --end=<ISO date> (default: now, rounded down to 15 minutes) and --days=7.
+   - provinces: the 9 real provinces of Sri Lanka. Fields: id (for example "WP"), name.
+   - districts: the 25 real districts, each with the correct province_id. Fields: id (for example "COL"), name, province_id.
+   - substations: 30, at least one per district, more in populous districts. Fields: id ("SUB-001"), name, district_id, voltage_kv, capacity_mva, latitude, longitude.
+   - installations: 200, spread across all substations. Fields: id ("INST-0001"), substation_id, district_id and province_id (denormalised copies used for fast jurisdiction checks - record this decision in data-model.md), meter_id and inverter_id (both unique), site_name, address, capacity_kw (2 to 20), panel_count, status (active | inactive | maintenance, about 95% active), commissioned_at, latitude and longitude plausible for the district, device_key_hash, created_at, updated_at.
+   - readings: one every 15 minutes for 7 days per installation (672 each). Fields: id (installation id + compact UTC timestamp, for example "INST-0001-20261005T0615Z"), installation_id, timestamp (UTC), power_kw, energy_kwh (cumulative meter total, never decreases), voltage_v. Realistic diurnal shape in Sri Lanka time (UTC+05:30): zero overnight, rising from about 06:00, peaking around noon near capacity_kw, falling to zero by about 18:30, with per-day cloud variation and small noise. Installations that are not active have a gap in their readings. Write readings.json compactly, one record per line.
+   - users: 1 admin, 2 national, 9 provincial (one per province), 25 district (one per district). Fields: id, username, full_name, role (admin | national | provincial | district), province_id and district_id (null where not applicable), password_hash (bcrypt). Use one documented demo password for all seed users.
+   - Device keys: generate one random key per installation, store only its SHA-256 hash in installations.json, and write the plaintext keys to data/seed/device-keys.local.json (git-ignored). Also write docs/demo-credentials.md listing the demo user logins and the plaintext device keys for the first 3 installations only, clearly marked as seed/demo data.
+
+3. Write scripts/validate-seed.js that checks: counts meet the brief's scale (9 / 25 / 20+ / 200+ / 1+ week per installation), every foreign key resolves, ids are unique, and energy_kwh never decreases within an installation. Add npm scripts seed:generate and seed:validate, and make npm test run the validator.
+
+4. Run both scripts, show me the record count and file size per collection, and commit the generator, the validator and the generated JSON.
+
+Then do the step wrap-up as Step 2 - Data model and seed data.
+```
+
+Summary of what was generated:
+
+- `docs/data-model.md`: domain model with a Mermaid ER diagram and the justified modelling decisions (no Device entity, append-only readings, denormalised jurisdiction ids).
+- `scripts/generate-seed.js`: deterministic seed generator writing 9 provinces, 25 districts, 30 substations, 200 installations, 131,027 readings and 37 users to `data/seed/`, plus `docs/demo-credentials.md`.
+- `scripts/validate-seed.js` and `tests/seed.test.js`: checks for scale, unique ids, foreign keys and meter totals, run by `npm test`.

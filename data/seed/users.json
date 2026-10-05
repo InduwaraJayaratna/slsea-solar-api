@@ -1,0 +1,335 @@
+[
+  {
+    "id": "USR-001",
+    "username": "admin",
+    "full_name": "Ruwan Fernando",
+    "role": "admin",
+    "province_id": null,
+    "district_id": null,
+    "password_hash": "$2b$10$ViLWLFpF3wmKqNkKvKdkAeF6fzkTDLv0blvQtgWZqvLDyNO8Eg/u2"
+  },
+  {
+    "id": "USR-002",
+    "username": "national1",
+    "full_name": "Dinesh Perera",
+    "role": "national",
+    "province_id": null,
+    "district_id": null,
+    "password_hash": "$2b$10$noI1amfOIcBq8bXOkOyx2eJVZMBrmViV4quAntPtBLIQR6M8z2g0C"
+  },
+  {
+    "id": "USR-003",
+    "username": "national2",
+    "full_name": "Ruwan Ismail",
+    "role": "national",
+    "province_id": null,
+    "district_id": null,
+    "password_hash": "$2b$10$gItPujjQTX0tpoa.7Kv50u5CoGavXdbaQc58Up.D37/O6KZnAqXNe"
+  },
+  {
+    "id": "USR-004",
+    "username": "prov.wp",
+    "full_name": "Ishara Navaratnam",
+    "role": "provincial",
+    "province_id": "WP",
+    "district_id": null,
+    "password_hash": "$2b$10$XaDqkVhNNnDx3FGv1Lvsl.9737HaKdMbEyy73FPl1ewecR.nKx8d2"
+  },
+  {
+    "id": "USR-005",
+    "username": "prov.cp",
+    "full_name": "Nimal Ratnayake",
+    "role": "provincial",
+    "province_id": "CP",
+    "district_id": null,
+    "password_hash": "$2b$10$EJf/usci1izZdaWjVWqidOiMSW6LbnWGgGw7KlWCEWDAUtWRD1.gi"
+  },
+  {
+    "id": "USR-006",
+    "username": "prov.sp",
+    "full_name": "Ahamed Dissanayake",
+    "role": "provincial",
+    "province_id": "SP",
+    "district_id": null,
+    "password_hash": "$2b$10$fP1AUHd2kFG8CjD/.uelhuzddBszsg4/FusC/2QHnWkehseuNSpB2"
+  },
+  {
+    "id": "USR-007",
+    "username": "prov.np",
+    "full_name": "Kasun Kumara",
+    "role": "provincial",
+    "province_id": "NP",
+    "district_id": null,
+    "password_hash": "$2b$10$XhND7mtBFggmaUTY3VVvre.s5dmCBRkz9Rabwm9wHDrmvsqEIh1WS"
+  },
+  {
+    "id": "USR-008",
+    "username": "prov.ep",
+    "full_name": "Ishara Fernando",
+    "role": "provincial",
+    "province_id": "EP",
+    "district_id": null,
+    "password_hash": "$2b$10$B78xDSQr20dXxXXPJvFW8uVvROQdyNojBbZHkQOBK2.Wz3FxbfKYe"
+  },
+  {
+    "id": "USR-009",
+    "username": "prov.nw",
+    "full_name": "Dilani Silva",
+    "role": "provincial",
+    "province_id": "NW",
+    "district_id": null,
+    "password_hash": "$2b$10$t3qKCkeZ8T6rXIYME1rtIOiSFVDpBpaLE1lGcxrsJvgLuC6SRNdUW"
+  },
+  {
+    "id": "USR-010",
+    "username": "prov.nc",
+    "full_name": "Ishara Perera",
+    "role": "provincial",
+    "province_id": "NC",
+    "district_id": null,
+    "password_hash": "$2b$10$ySPUzu1cn3aIRfdszlp9.e73PTc6C3LTT2Ngs2.heEt280sfynD4."
+  },
+  {
+    "id": "USR-011",
+    "username": "prov.uv",
+    "full_name": "Ishara Ratnayake",
+    "role": "provincial",
+    "province_id": "UV",
+    "district_id": null,
+    "password_hash": "$2b$10$.TOPFKf4dszEKP4wlwKrsuVJmBEjA9pv9draGuDMUipY3nQI6Gqvu"
+  },
+  {
+    "id": "USR-012",
+    "username": "prov.sg",
+    "full_name": "Ahamed Wickramasinghe",
+    "role": "provincial",
+    "province_id": "SG",
+    "district_id": null,
+    "password_hash": "$2b$10$/zBNqAF3uSixjcmGqfwphOH4pahWUdfQBLbihWlaRavi5ERje2VlG"
+  },
+  {
+    "id": "USR-013",
+    "username": "dist.col",
+    "full_name": "Dinesh Mohamed",
+    "role": "district",
+    "province_id": "WP",
+    "district_id": "COL",
+    "password_hash": "$2b$10$mnyp4Rw8huoksvLOyP451Ony9YShgyfIzDCwzohDi.ar6cdpHG2NK"
+  },
+  {
+    "id": "USR-014",
+    "username": "dist.gam",
+    "full_name": "Malini Dissanayake",
+    "role": "district",
+    "province_id": "WP",
+    "district_id": "GAM",
+    "password_hash": "$2b$10$QSlLUChBjXnRqPhH1/0fTeO45//0.IDJAiwnuulO.d5XMUDR1J.FW"
+  },
+  {
+    "id": "USR-015",
+    "username": "dist.kal",
+    "full_name": "Nimal Jayasinghe",
+    "role": "district",
+    "province_id": "WP",
+    "district_id": "KAL",
+    "password_hash": "$2b$10$ompz/dYHj6cVISfIdfxtJOWP90e589LMvmdVwdeFN4J6nZitAi3XW"
+  },
+  {
+    "id": "USR-016",
+    "username": "dist.kan",
+    "full_name": "Priya Perera",
+    "role": "district",
+    "province_id": "CP",
+    "district_id": "KAN",
+    "password_hash": "$2b$10$Y.IiiBEnvDnX4U2DNGosKemr/wZDO.XutP4hcjjcpyVVZqnyac.t2"
+  },
+  {
+    "id": "USR-017",
+    "username": "dist.mtl",
+    "full_name": "Chamari Senanayake",
+    "role": "district",
+    "province_id": "CP",
+    "district_id": "MTL",
+    "password_hash": "$2b$10$tAD77iLmKpb1PrBR4X6OCORUb9tKeCsPqDgJUgBr2DdzYbuZjXGI6"
+  },
+  {
+    "id": "USR-018",
+    "username": "dist.nuw",
+    "full_name": "Ishara Sivakumar",
+    "role": "district",
+    "province_id": "CP",
+    "district_id": "NUW",
+    "password_hash": "$2b$10$hV2w.HA0f.z/QUUV8YyTyOktPpxgRIax35oOuld8YxcSCEyf9OfSK"
+  },
+  {
+    "id": "USR-019",
+    "username": "dist.gal",
+    "full_name": "Kasun Kumara",
+    "role": "district",
+    "province_id": "SP",
+    "district_id": "GAL",
+    "password_hash": "$2b$10$ZUk8DKA55PZ4BGe6Ur7LwebdT6r1JwrnaW9TQC8/r7Fr1yeA4TXXi"
+  },
+  {
+    "id": "USR-020",
+    "username": "dist.mtr",
+    "full_name": "Sunil Bandara",
+    "role": "district",
+    "province_id": "SP",
+    "district_id": "MTR",
+    "password_hash": "$2b$10$QYeZj7nY1/LHxrKEckVR8ugBOlIZH78asDZ88htyjFwM1w48V75Q6"
+  },
+  {
+    "id": "USR-021",
+    "username": "dist.ham",
+    "full_name": "Nimal Jayasinghe",
+    "role": "district",
+    "province_id": "SP",
+    "district_id": "HAM",
+    "password_hash": "$2b$10$WcxYoVJBxwwHEN6vJrIg0eP5VCyOPtjsCW.Zjujg3SdiXsM7mAtkS"
+  },
+  {
+    "id": "USR-022",
+    "username": "dist.jaf",
+    "full_name": "Dinesh Sivakumar",
+    "role": "district",
+    "province_id": "NP",
+    "district_id": "JAF",
+    "password_hash": "$2b$10$e7BCezEqe2h5e8zMrBa0NeiSnqGJ5B3MCCE6M4csRcA.U4A8FEbFG"
+  },
+  {
+    "id": "USR-023",
+    "username": "dist.kil",
+    "full_name": "Pradeep Fernando",
+    "role": "district",
+    "province_id": "NP",
+    "district_id": "KIL",
+    "password_hash": "$2b$10$A1z6L6jZF5C0PzOd0OkQ9O.KgnHo8L8YtgaeL3U7W7iVcY7JeSg4S"
+  },
+  {
+    "id": "USR-024",
+    "username": "dist.man",
+    "full_name": "Pradeep Mohamed",
+    "role": "district",
+    "province_id": "NP",
+    "district_id": "MAN",
+    "password_hash": "$2b$10$6gtCciGUYWgyIaPWQBlKJ.TLQ0TFhQgvcL7oJKansAykAkqVDtALC"
+  },
+  {
+    "id": "USR-025",
+    "username": "dist.vav",
+    "full_name": "Nimal Senanayake",
+    "role": "district",
+    "province_id": "NP",
+    "district_id": "VAV",
+    "password_hash": "$2b$10$M4cvJdb8Q.A5Kc.l6oy1dO4UZW7NuKqg93qRPdZDzgslZaiRVDW7W"
+  },
+  {
+    "id": "USR-026",
+    "username": "dist.mul",
+    "full_name": "Kamala Gunawardena",
+    "role": "district",
+    "province_id": "NP",
+    "district_id": "MUL",
+    "password_hash": "$2b$10$5cjY5q3fobYmy/nQKsY3s.nanf9o9KVfenudnaxhvC9I9JJOUbD7u"
+  },
+  {
+    "id": "USR-027",
+    "username": "dist.bat",
+    "full_name": "Sunil Silva",
+    "role": "district",
+    "province_id": "EP",
+    "district_id": "BAT",
+    "password_hash": "$2b$10$pDlq7QuCgh.8.9ZIWE/OJuRDpaE0UIXLzhFWTAceymAr7g8jROcrG"
+  },
+  {
+    "id": "USR-028",
+    "username": "dist.amp",
+    "full_name": "Pradeep Perera",
+    "role": "district",
+    "province_id": "EP",
+    "district_id": "AMP",
+    "password_hash": "$2b$10$5L4trRcu.0qKelSuVjKYEu4qUfP/ZL3IR/HjdwlZfFcgGTveKxFCy"
+  },
+  {
+    "id": "USR-029",
+    "username": "dist.tri",
+    "full_name": "Malini Perera",
+    "role": "district",
+    "province_id": "EP",
+    "district_id": "TRI",
+    "password_hash": "$2b$10$3KijFh8pIgHqyYJO1hjz2uvOpVLh08v6GlL4PV05TAE/knRX73y4a"
+  },
+  {
+    "id": "USR-030",
+    "username": "dist.kur",
+    "full_name": "Kasun Mohamed",
+    "role": "district",
+    "province_id": "NW",
+    "district_id": "KUR",
+    "password_hash": "$2b$10$txnDoDR5bJ2vYYAGMuwFNeeSGe0f8iqK5XZOdpzav4iGmLTe4poRi"
+  },
+  {
+    "id": "USR-031",
+    "username": "dist.put",
+    "full_name": "Ruwan Perera",
+    "role": "district",
+    "province_id": "NW",
+    "district_id": "PUT",
+    "password_hash": "$2b$10$JOJfBJPvWjpzDMPBaBsiXOxzT9F1VSmPHorm3LaC58oAYukSNvMOm"
+  },
+  {
+    "id": "USR-032",
+    "username": "dist.anu",
+    "full_name": "Fathima Gunawardena",
+    "role": "district",
+    "province_id": "NC",
+    "district_id": "ANU",
+    "password_hash": "$2b$10$ZIOKBJSjOeAw.cbpbfIeyuxYGCFh1iG9EDHDcOTmAIeSXRzK36vfS"
+  },
+  {
+    "id": "USR-033",
+    "username": "dist.pol",
+    "full_name": "Kamala Rodrigo",
+    "role": "district",
+    "province_id": "NC",
+    "district_id": "POL",
+    "password_hash": "$2b$10$uTDUS.AUSRmowtI3xsMB4eptEJZ.U9bqoYdsck04dTsoEYWznD.hC"
+  },
+  {
+    "id": "USR-034",
+    "username": "dist.bad",
+    "full_name": "Fathima Wickramasinghe",
+    "role": "district",
+    "province_id": "UV",
+    "district_id": "BAD",
+    "password_hash": "$2b$10$EN/YgWeLKjurxmC/FLplCeizh8JSVEgBBynhdYm14XDBR.gHRlHtC"
+  },
+  {
+    "id": "USR-035",
+    "username": "dist.mon",
+    "full_name": "Dilani Herath",
+    "role": "district",
+    "province_id": "UV",
+    "district_id": "MON",
+    "password_hash": "$2b$10$kw.PrKu7kFPrhSJsxJkdHuji/cr6XsDR/nPLz7sIIXQWZoApH3uWS"
+  },
+  {
+    "id": "USR-036",
+    "username": "dist.rat",
+    "full_name": "Dinesh Bandara",
+    "role": "district",
+    "province_id": "SG",
+    "district_id": "RAT",
+    "password_hash": "$2b$10$Uk1IJiWIgYfd3XPlXnYCwuKh3dUYE/JlnmkGGCtnaBPh5ZyAWJHgC"
+  },
+  {
+    "id": "USR-037",
+    "username": "dist.keg",
+    "full_name": "Pradeep Mohamed",
+    "role": "district",
+    "province_id": "SG",
+    "district_id": "KEG",
+    "password_hash": "$2b$10$eC2f.4Ip7psho7KMrpphc.4YK7b47OlKNgRQtKr8DYj3JIRxJCFlW"
+  }
+]

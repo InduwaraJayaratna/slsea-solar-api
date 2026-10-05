@@ -1,0 +1,272 @@
+[
+  {
+    "id": "SUB-001",
+    "name": "Kolonnawa Grid Substation",
+    "district_id": "COL",
+    "voltage_kv": 132,
+    "capacity_mva": 31.5,
+    "latitude": 6.87335,
+    "longitude": 79.90486
+  },
+  {
+    "id": "SUB-002",
+    "name": "Dehiwala Grid Substation",
+    "district_id": "COL",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 6.8976,
+    "longitude": 79.91073
+  },
+  {
+    "id": "SUB-003",
+    "name": "Maharagama Grid Substation",
+    "district_id": "COL",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 6.84633,
+    "longitude": 79.91478
+  },
+  {
+    "id": "SUB-004",
+    "name": "Biyagama Grid Substation",
+    "district_id": "GAM",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 7.0651,
+    "longitude": 80.00093
+  },
+  {
+    "id": "SUB-005",
+    "name": "Kotugoda Grid Substation",
+    "district_id": "GAM",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 7.04666,
+    "longitude": 79.96834
+  },
+  {
+    "id": "SUB-006",
+    "name": "Panadura Grid Substation",
+    "district_id": "KAL",
+    "voltage_kv": 220,
+    "capacity_mva": 90,
+    "latitude": 6.58861,
+    "longitude": 80.11186
+  },
+  {
+    "id": "SUB-007",
+    "name": "Kiribathkumbura Grid Substation",
+    "district_id": "KAN",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 7.28332,
+    "longitude": 80.67395
+  },
+  {
+    "id": "SUB-008",
+    "name": "Pallekele Grid Substation",
+    "district_id": "KAN",
+    "voltage_kv": 132,
+    "capacity_mva": 31.5,
+    "latitude": 7.33611,
+    "longitude": 80.6818
+  },
+  {
+    "id": "SUB-009",
+    "name": "Ukuwela Grid Substation",
+    "district_id": "MTL",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 7.61281,
+    "longitude": 80.65629
+  },
+  {
+    "id": "SUB-010",
+    "name": "Nuwara Eliya Grid Substation",
+    "district_id": "NUW",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 6.92953,
+    "longitude": 80.74563
+  },
+  {
+    "id": "SUB-011",
+    "name": "Galle Grid Substation",
+    "district_id": "GAL",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 6.24372,
+    "longitude": 80.30673
+  },
+  {
+    "id": "SUB-012",
+    "name": "Matara Grid Substation",
+    "district_id": "MTR",
+    "voltage_kv": 132,
+    "capacity_mva": 31.5,
+    "latitude": 6.13497,
+    "longitude": 80.53763
+  },
+  {
+    "id": "SUB-013",
+    "name": "Hambantota Grid Substation",
+    "district_id": "HAM",
+    "voltage_kv": 220,
+    "capacity_mva": 31.5,
+    "latitude": 6.2179,
+    "longitude": 81.03132
+  },
+  {
+    "id": "SUB-014",
+    "name": "Chunnakam Grid Substation",
+    "district_id": "JAF",
+    "voltage_kv": 132,
+    "capacity_mva": 31.5,
+    "latitude": 9.6822,
+    "longitude": 80.03942
+  },
+  {
+    "id": "SUB-015",
+    "name": "Kilinochchi Grid Substation",
+    "district_id": "KIL",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 9.41462,
+    "longitude": 80.36818
+  },
+  {
+    "id": "SUB-016",
+    "name": "Mannar Grid Substation",
+    "district_id": "MAN",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 8.80988,
+    "longitude": 80.03738
+  },
+  {
+    "id": "SUB-017",
+    "name": "Vavuniya Grid Substation",
+    "district_id": "VAV",
+    "voltage_kv": 220,
+    "capacity_mva": 90,
+    "latitude": 8.77905,
+    "longitude": 80.50086
+  },
+  {
+    "id": "SUB-018",
+    "name": "Mullaitivu Grid Substation",
+    "district_id": "MUL",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 9.16799,
+    "longitude": 80.5981
+  },
+  {
+    "id": "SUB-019",
+    "name": "Valaichchenai Grid Substation",
+    "district_id": "BAT",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 7.67246,
+    "longitude": 81.6351
+  },
+  {
+    "id": "SUB-020",
+    "name": "Ampara Grid Substation",
+    "district_id": "AMP",
+    "voltage_kv": 220,
+    "capacity_mva": 126,
+    "latitude": 7.25213,
+    "longitude": 81.58836
+  },
+  {
+    "id": "SUB-021",
+    "name": "Trincomalee Grid Substation",
+    "district_id": "TRI",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 8.52427,
+    "longitude": 81.09942
+  },
+  {
+    "id": "SUB-022",
+    "name": "Kurunegala Grid Substation",
+    "district_id": "KUR",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 7.67077,
+    "longitude": 80.34505
+  },
+  {
+    "id": "SUB-023",
+    "name": "Maho Grid Substation",
+    "district_id": "KUR",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 7.54511,
+    "longitude": 80.28691
+  },
+  {
+    "id": "SUB-024",
+    "name": "Puttalam Grid Substation",
+    "district_id": "PUT",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 7.95191,
+    "longitude": 79.89485
+  },
+  {
+    "id": "SUB-025",
+    "name": "Anuradhapura Grid Substation",
+    "district_id": "ANU",
+    "voltage_kv": 132,
+    "capacity_mva": 63,
+    "latitude": 8.35414,
+    "longitude": 80.4004
+  },
+  {
+    "id": "SUB-026",
+    "name": "Polonnaruwa Grid Substation",
+    "district_id": "POL",
+    "voltage_kv": 132,
+    "capacity_mva": 90,
+    "latitude": 7.91043,
+    "longitude": 81.03158
+  },
+  {
+    "id": "SUB-027",
+    "name": "Badulla Grid Substation",
+    "district_id": "BAD",
+    "voltage_kv": 132,
+    "capacity_mva": 31.5,
+    "latitude": 6.95299,
+    "longitude": 81.08137
+  },
+  {
+    "id": "SUB-028",
+    "name": "Monaragala Grid Substation",
+    "district_id": "MON",
+    "voltage_kv": 132,
+    "capacity_mva": 90,
+    "latitude": 6.8407,
+    "longitude": 81.25997
+  },
+  {
+    "id": "SUB-029",
+    "name": "Balangoda Grid Substation",
+    "district_id": "RAT",
+    "voltage_kv": 132,
+    "capacity_mva": 31.5,
+    "latitude": 6.65944,
+    "longitude": 80.39442
+  },
+  {
+    "id": "SUB-030",
+    "name": "Kegalle Grid Substation",
+    "district_id": "KEG",
+    "voltage_kv": 132,
+    "capacity_mva": 126,
+    "latitude": 7.21718,
+    "longitude": 80.35376
+  }
+]

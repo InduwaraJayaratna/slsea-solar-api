@@ -1,0 +1,127 @@
+[
+  {
+    "id": "COL",
+    "name": "Colombo",
+    "province_id": "WP"
+  },
+  {
+    "id": "GAM",
+    "name": "Gampaha",
+    "province_id": "WP"
+  },
+  {
+    "id": "KAL",
+    "name": "Kalutara",
+    "province_id": "WP"
+  },
+  {
+    "id": "KAN",
+    "name": "Kandy",
+    "province_id": "CP"
+  },
+  {
+    "id": "MTL",
+    "name": "Matale",
+    "province_id": "CP"
+  },
+  {
+    "id": "NUW",
+    "name": "Nuwara Eliya",
+    "province_id": "CP"
+  },
+  {
+    "id": "GAL",
+    "name": "Galle",
+    "province_id": "SP"
+  },
+  {
+    "id": "MTR",
+    "name": "Matara",
+    "province_id": "SP"
+  },
+  {
+    "id": "HAM",
+    "name": "Hambantota",
+    "province_id": "SP"
+  },
+  {
+    "id": "JAF",
+    "name": "Jaffna",
+    "province_id": "NP"
+  },
+  {
+    "id": "KIL",
+    "name": "Kilinochchi",
+    "province_id": "NP"
+  },
+  {
+    "id": "MAN",
+    "name": "Mannar",
+    "province_id": "NP"
+  },
+  {
+    "id": "VAV",
+    "name": "Vavuniya",
+    "province_id": "NP"
+  },
+  {
+    "id": "MUL",
+    "name": "Mullaitivu",
+    "province_id": "NP"
+  },
+  {
+    "id": "BAT",
+    "name": "Batticaloa",
+    "province_id": "EP"
+  },
+  {
+    "id": "AMP",
+    "name": "Ampara",
+    "province_id": "EP"
+  },
+  {
+    "id": "TRI",
+    "name": "Trincomalee",
+    "province_id": "EP"
+  },
+  {
+    "id": "KUR",
+    "name": "Kurunegala",
+    "province_id": "NW"
+  },
+  {
+    "id": "PUT",
+    "name": "Puttalam",
+    "province_id": "NW"
+  },
+  {
+    "id": "ANU",
+    "name": "Anuradhapura",
+    "province_id": "NC"
+  },
+  {
+    "id": "POL",
+    "name": "Polonnaruwa",
+    "province_id": "NC"
+  },
+  {
+    "id": "BAD",
+    "name": "Badulla",
+    "province_id": "UV"
+  },
+  {
+    "id": "MON",
+    "name": "Monaragala",
+    "province_id": "UV"
+  },
+  {
+    "id": "RAT",
+    "name": "Ratnapura",
+    "province_id": "SG"
+  },
+  {
+    "id": "KEG",
+    "name": "Kegalle",
+    "province_id": "SG"
+  }
+]

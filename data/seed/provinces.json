@@ -1,0 +1,38 @@
+[
+  {
+    "id": "WP",
+    "name": "Western"
+  },
+  {
+    "id": "CP",
+    "name": "Central"
+  },
+  {
+    "id": "SP",
+    "name": "Southern"
+  },
+  {
+    "id": "NP",
+    "name": "Northern"
+  },
+  {
+    "id": "EP",
+    "name": "Eastern"
+  },
+  {
+    "id": "NW",
+    "name": "North Western"
+  },
+  {
+    "id": "NC",
+    "name": "North Central"
+  },
+  {
+    "id": "UV",
+    "name": "Uva"
+  },
+  {
+    "id": "SG",
+    "name": "Sabaragamuwa"
+  }
+]
