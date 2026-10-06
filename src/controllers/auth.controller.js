@@ -1,30 +1,15 @@
 const authService = require('../services/auth.service');
+const { LOGIN } = require('./body-schemas');
 const { parseQuery } = require('../utils/query');
+const validateBody = require('../utils/validate-body');
 const AppError = require('../utils/app-error');
-
-const FIELDS = ['username', 'password'];
 
 // POST /auth/tokens with { "username", "password" }: issue an access token.
 async function createToken(req, res) {
   parseQuery(req.query);
+  const { username, password } = validateBody(req.body, LOGIN);
 
-  const body = req.body;
-  const details = [];
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    details.push({ field: 'body', message: 'must be a JSON object' });
-  } else {
-    for (const field of FIELDS) {
-      if (typeof body[field] !== 'string' || body[field] === '') {
-        details.push({ field, message: 'is required and must be a non-empty string' });
-      }
-    }
-    for (const field of Object.keys(body)) {
-      if (!FIELDS.includes(field)) details.push({ field, message: 'is not a supported field' });
-    }
-  }
-  if (details.length > 0) throw AppError.badRequest('Invalid request body', details);
-
-  const result = await authService.login(body.username, body.password);
+  const result = await authService.login(username, password);
   // One message for both cases, so it does not reveal whether the username exists.
   if (!result) throw AppError.unauthorized('Invalid username or password');
 
