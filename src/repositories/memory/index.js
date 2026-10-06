@@ -11,6 +11,16 @@ const copy = (record) => ({ ...record });
 
 function createRepository(name) {
   return {
+    // Records whose fields equal every value in `filter` (all records for {}),
+    // sorted by id so results and pages come back in a stable order.
+    async findAll(filter = {}) {
+      const conditions = Object.entries(filter);
+      return collections[name]
+        .filter((record) => conditions.every(([field, value]) => record[field] === value))
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map(copy);
+    },
+
     async findById(id) {
       const record = byId[name].get(id);
       return record ? copy(record) : null;
