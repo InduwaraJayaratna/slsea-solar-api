@@ -223,3 +223,40 @@ Summary of what was generated:
 - `POST /auth/tokens` (bcrypt check, HS256 JWT with role and jurisdiction) and `authenticateUser` on every GET except `/health`; `authenticateDevice` (SHA-256 + `timingSafeEqual`, 401/403) with unit tests; helmet, cors and a fail-fast `JWT_SECRET` check.
 - One jurisdiction module used by every service: 403 outside the jurisdiction, 404 when missing, collections narrowed automatically, explicit filters outside it refused.
 - Services now throw `AppError` for not-found and forbidden; existing tests authenticate, and new auth, jurisdiction and device tests bring the total to 141.
+
+## Step 7 - Write path and CRUD semantics
+
+Date: 2026-10-06
+
+Prompt:
+
+```text
+Step 7 - Write path: device ingestion and CRUD semantics on installations.
+
+1. Ingestion: POST /installations/{installation_id}/readings, authenticated with authenticateDevice only. Body: timestamp (ISO 8601 UTC), power_kw (>= 0), energy_kwh (>= 0), voltage_v (> 0). On success return 201 with the created reading as the body and a Location header pointing to /api/v1/installations/{installation_id}/readings/{reading_id}. The reading id is derived from the installation id and timestamp, so a device retrying the same reading gets 409 Conflict instead of creating a duplicate. Validation failures return 400 with one details entry per bad field. Reject a timestamp more than 5 minutes in the future (400), an energy_kwh lower than the installation's previous cumulative value (409), and a write to an installation whose status is not active (409).
+
+2. Readings are append-only: PUT, PATCH and DELETE on /installations/{id}/readings and /installations/{id}/readings/{reading_id} return 405 with an Allow header. Explain the decision in a code comment.
+
+3. Installation management, admin role only (other user roles get 403; a device key gets 401):
+   - POST /substations/{substation_id}/installations creates an installation: 201, Location header, body is the new resource. The server generates the id and a device key, returns the plaintext device key once in this response, and stores only its hash. A duplicate meter_id or inverter_id returns 409.
+   - PUT /installations/{installation_id} fully replaces the client-editable fields and is idempotent. Missing required fields return 400. Returns 200 with the updated resource.
+   - PATCH /installations/{installation_id} is a partial update (for example status or capacity_kw). Unknown or read-only fields (id, substation_id, district_id, province_id, created_at) return 400.
+   - DELETE /installations/{installation_id} returns 204, and repeating it returns 404. Refuse with 409 if the installation has readings, and tell the client to set status to inactive instead, so history is never destroyed.
+   - Optimistic concurrency: PUT, PATCH and DELETE honour If-Match. If the supplied ETag does not match the current representation, return 412 Precondition Failed. Successful writes return the new ETag and Last-Modified.
+
+4. Provinces, districts and substations stay read-only reference data: POST, PUT, PATCH and DELETE on them return 405 with an Allow header.
+
+5. Writes go through the repository layer (create, update, remove, appendReading). In memory mode they change the in-memory store only and are lost on restart; that is expected until the MongoDB step.
+
+6. Use one small shared validation helper for all request bodies; no ad-hoc checks inside controllers.
+
+Tests: ingest success (201, Location resolves with GET, last-reading now returns it); duplicate (409); wrong device key (403); user JWT on ingest (401); bad body (400 with details); 405 on PUT and DELETE of a reading; installation create, replace, patch and delete as admin; 403 as a district user; stale If-Match (412); PUT twice gives the same result.
+
+Then do the step wrap-up as Step 7 - Write path and CRUD semantics.
+```
+
+Summary of what was generated:
+
+- Device ingestion (`POST /installations/{id}/readings`): 201 with Location, id from installation and timestamp so retries get 409, plus future-timestamp, decreasing-energy and not-active checks; readings append-only (405 on PUT/PATCH/DELETE).
+- Admin installation management: create on a substation (server-generated id and one-time device key), PUT, PATCH and DELETE, with If-Match giving 412 on stale ETags and 409 for duplicates or for deleting an installation with readings; reference data stays 405.
+- One shared `validateBody` helper with per-field details, repository write methods (create, update, remove, appendReading), and 168 tests in total.
