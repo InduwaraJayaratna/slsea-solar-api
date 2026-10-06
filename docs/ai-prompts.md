@@ -152,3 +152,39 @@ Summary of what was generated:
 - GET endpoints for provinces, districts, substations and installations (atomic, scoped and estate-wide with filters), each through routes, controllers, services and repositories, with explicit allow-list serializers.
 - Shared helpers: query validation (unknown, repeated and invalid parameters give 400 naming each one), pagination envelope with links and a Link header, and conditional GET (SHA-256 ETag, Last-Modified, 304, `Cache-Control: private, no-cache`).
 - 71 tests in total, covering every endpoint, missing parents, empty children, pagination totals and links, query validation and 304 round trips.
+
+## Step 5 - Operational and analytical reads
+
+Date: 2026-10-06
+
+Prompt:
+
+```text
+Step 5 - Operational and analytical reads on generation data.
+
+1. Composite: GET /installations/{installation_id}/overview returns the installation together with its substation, district and province (id and name each), its last-known reading, and the energy generated so far today in kWh (Sri Lanka local day). One response an operations screen could render without further calls.
+
+2. Operational: GET /installations/{installation_id}/last-reading returns the single most recent reading for the installation as a derived resource, not as a query on the collection. Include age_seconds and a stale flag that is true when the reading is older than 30 minutes. Return 404 if the installation does not exist, and 404 with a distinct error code if it has no readings yet.
+
+3. Analytical, scoped: GET /installations/{installation_id}/readings is the history sub-collection, and GET /installations/{installation_id}/readings/{reading_id} returns one reading.
+
+4. Analytical, cross-estate: GET /readings with jurisdiction filters province_id, district_id, substation_id and installation_id. Resolve the jurisdiction to its installation ids first, then query readings.
+
+5. Both reading collections support:
+   - Time window: from and to (ISO 8601; from is inclusive, to is exclusive). Invalid dates, or from >= to, return 400.
+   - Sorting: sort=timestamp (ascending) or sort=-timestamp (descending, the default). Any other sort field returns 400.
+   - Pagination with the shared helper: total count, and next and prev links that preserve all current query parameters.
+   - Conditional GET with ETag and Last-Modified (the timestamp of the newest reading in the result), returning 304 when unchanged.
+
+6. Repository methods take filter, sort, skip and limit arguments and return {items, total}, so the same signature maps directly onto a MongoDB query later. Do not load everything and slice in the controller.
+
+Tests: for an always-active installation, page 1 and page 2 of its history do not overlap and total is 672; ascending and descending order; a one-day window returns 96 readings; the district filter returns only readings from installations in that district; invalid from, sort and page_size each return 400; last-reading equals the first item of the descending history; overview contains all four hierarchy levels.
+
+Then do the step wrap-up as Step 5 - Operational and analytical reads.
+```
+
+Summary of what was generated:
+
+- Overview (installation, substation, district, province, last reading, energy today in Sri Lanka time) and last-reading (age_seconds, stale, 404 NO_READINGS, weak ETag) endpoints.
+- Reading history, single reading and estate-wide `/readings` (jurisdiction resolved to installation ids), with from/to windows, sort, pagination and conditional GET.
+- `readings.findMany(filter, { sort, skip, limit })` returning `{ items, total }` with binary-searched time windows, an injectable clock, and 107 tests in total.

@@ -68,7 +68,7 @@ src/
     memory/         loads data/seed/ once and indexes it
   middleware/       request id, logging, content negotiation, 404, errors
   serializers/      what clients see of each resource (explicit field lists)
-  utils/            AppError, query validation, pagination, conditional GET
+  utils/            AppError, query validation, pagination, conditional GET, clock
 tests/              node:test + supertest
 scripts/            seed generator and validator
 data/seed/          seed JSON, one array per collection
@@ -81,18 +81,23 @@ Base path: `/api/v1`. The API speaks JSON only.
 All endpoints are open for now; authentication arrives in Step 6. Paths below are
 relative to `/api/v1`.
 
-| Method | Path                                         | Returns                                                      |
-| ------ | -------------------------------------------- | ------------------------------------------------------------ |
-| GET    | `/health`                                    | status, version, data source and record count per collection |
-| GET    | `/provinces`                                 | all provinces (collection)                                   |
-| GET    | `/provinces/{province_id}`                   | one province                                                 |
-| GET    | `/provinces/{province_id}/districts`         | the province's districts (collection)                        |
-| GET    | `/districts/{district_id}`                   | one district                                                 |
-| GET    | `/districts/{district_id}/substations`       | the district's substations (collection)                      |
-| GET    | `/substations/{substation_id}`               | one substation                                               |
-| GET    | `/substations/{substation_id}/installations` | the substation's installations (collection)                  |
-| GET    | `/installations`                             | installations across the estate (collection, filterable)     |
-| GET    | `/installations/{installation_id}`           | one installation                                             |
+| Method | Path                                                     | Returns                                                                                 |
+| ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| GET    | `/health`                                                | status, version, data source and record count per collection                            |
+| GET    | `/provinces`                                             | all provinces (collection)                                                              |
+| GET    | `/provinces/{province_id}`                               | one province                                                                            |
+| GET    | `/provinces/{province_id}/districts`                     | the province's districts (collection)                                                   |
+| GET    | `/districts/{district_id}`                               | one district                                                                            |
+| GET    | `/districts/{district_id}/substations`                   | the district's substations (collection)                                                 |
+| GET    | `/substations/{substation_id}`                           | one substation                                                                          |
+| GET    | `/substations/{substation_id}/installations`             | the substation's installations (collection)                                             |
+| GET    | `/installations`                                         | installations across the estate (collection, filterable)                                |
+| GET    | `/installations/{installation_id}`                       | one installation                                                                        |
+| GET    | `/installations/{installation_id}/overview`              | the installation with its substation, district, province, last reading and energy today |
+| GET    | `/installations/{installation_id}/last-reading`          | the latest reading, with `age_seconds` and `stale`                                      |
+| GET    | `/installations/{installation_id}/readings`              | the installation's reading history (collection)                                         |
+| GET    | `/installations/{installation_id}/readings/{reading_id}` | one reading                                                                             |
+| GET    | `/readings`                                              | readings across the estate (collection, filterable)                                     |
 
 A nested collection returns 404 if its parent does not exist, and 200 with an empty
 `data` array if the parent exists but has no children.
@@ -137,14 +142,76 @@ invalid `page`/`page_size` returns 400. `details` names each bad parameter:
 }
 ```
 
+### Readings
+
+Both reading collections (`/installations/{installation_id}/readings` and
+`/readings`) accept:
+
+| Parameter           | Meaning                                                                |
+| ------------------- | ---------------------------------------------------------------------- |
+| `from`              | start of the time window, inclusive (ISO 8601)                         |
+| `to`                | end of the time window, exclusive (ISO 8601)                           |
+| `sort`              | `-timestamp` (newest first, the default) or `timestamp` (oldest first) |
+| `page`, `page_size` | as for every collection                                                |
+
+`from` and `to` take a date (`2026-10-01` = 00:00 UTC) or a date-time with a time
+zone (`2026-10-01T00:00:00Z`, or `2026-10-01T00:00:00+05:30` for Sri Lanka time).
+Write a `+` as `%2B` in a URL, or it is read as a space. A time without a time zone,
+an impossible date, or `from` not before `to` returns 400.
+
+`GET /readings` also filters by jurisdiction: `province_id`, `district_id`,
+`substation_id`, `installation_id`. These are first resolved to the matching
+installations, then their readings are returned.
+
+```sh
+curl 'http://localhost:3000/api/v1/readings?district_id=COL&from=2026-10-01&to=2026-10-02&sort=timestamp'
+```
+
+`last-reading` is a derived resource: the newest reading, plus `age_seconds` (how old
+it is now) and `stale` (`true` when older than 30 minutes, since installations report
+every 15). It returns 404 `NOT_FOUND` for an unknown installation and 404
+`NO_READINGS` for one that has not reported yet.
+
+`overview` gives an operations screen everything in one response:
+
+```json
+{
+  "installation": { "id": "INST-0001", "...": "..." },
+  "substation": { "id": "SUB-001", "name": "Kolonnawa Grid Substation" },
+  "district": { "id": "COL", "name": "Colombo" },
+  "province": { "id": "WP", "name": "Western" },
+  "last_reading": {
+    "id": "INST-0001-20261006T0000Z",
+    "timestamp": "2026-10-06T00:00:00Z",
+    "...": "..."
+  },
+  "today": { "date": "2026-10-06", "energy_kwh": 0 }
+}
+```
+
+`today` is the current Sri Lanka calendar day (UTC+05:30). `energy_kwh` is the latest
+meter total today minus the last total before local midnight.
+
+The committed seed data ends at 2026-10-06 00:00 UTC, so against the real clock
+every `last-reading` is stale and today's energy is 0. For a live-looking demo,
+regenerate the seed so it ends now (`npm run seed:generate`). Doing so changes the
+committed files.
+
 ### Conditional GET and caching
 
 Every GET response has:
 
-- `ETag`: a strong validator, a SHA-256 hash of the exact response body.
-- `Last-Modified`: the resource's `updated_at`, or the newest `updated_at` in the
-  collection. Only installations have `updated_at`, so provinces, districts and
-  substations rely on the ETag alone.
+- `ETag`: a strong validator, a SHA-256 hash of the exact response body. The one
+  exception is `last-reading`: its `age_seconds` changes every second, so it gets a
+  weak ETag (`W/"..."`) built from the reading's id and `stale`.
+- `Last-Modified`, where the data has a time to give:
+  - installations: `updated_at` (or, for a collection, the newest `updated_at`);
+  - readings: the reading's `timestamp` (or, for a collection, the newest matching
+    reading's);
+  - overview: the latest of the installation's `updated_at`, its newest reading and
+    local midnight (when `today` restarts);
+  - provinces, districts and substations have no timestamp, so they rely on the
+    ETag alone.
 - `Cache-Control: private, no-cache`: clients may keep a copy but must revalidate
   it each time.
 
@@ -221,6 +288,7 @@ is git-ignored.
 | 2    | Data model and seed data                | Done   |
 | 3    | Express skeleton and error contract     | Done   |
 | 4    | Hierarchy read path and conditional GET | Done   |
+| 5    | Operational and analytical reads        | Done   |
 
 ## AI disclosure
 
