@@ -17,8 +17,13 @@ class AppError extends Error {
     return new AppError(400, 'BAD_REQUEST', message, details);
   }
 
-  static unauthorized(message = 'Authentication is required', details) {
-    return new AppError(401, 'UNAUTHORIZED', message, details);
+  // RFC 9110 requires a 401 to say how to authenticate, in WWW-Authenticate.
+  static unauthorized(
+    message = 'Authentication is required',
+    details,
+    challenge = 'Bearer realm="slsea-solar-api"',
+  ) {
+    return new AppError(401, 'UNAUTHORIZED', message, details, { 'WWW-Authenticate': challenge });
   }
 
   static forbidden(message = 'You do not have permission to do this', details) {

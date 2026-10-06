@@ -24,6 +24,17 @@ test('each helper sets the right status and code', () => {
   }
 });
 
+test('unauthorized carries a WWW-Authenticate challenge', () => {
+  assert.equal(
+    AppError.unauthorized().headers['WWW-Authenticate'],
+    'Bearer realm="slsea-solar-api"',
+  );
+  assert.equal(
+    AppError.unauthorized('x', [], 'DeviceKey').headers['WWW-Authenticate'],
+    'DeviceKey',
+  );
+});
+
 test('details are kept when given', () => {
   const details = [{ field: 'capacity_kw', issue: 'must be a number' }];
   assert.deepEqual(AppError.badRequest('Invalid body', details).details, details);
