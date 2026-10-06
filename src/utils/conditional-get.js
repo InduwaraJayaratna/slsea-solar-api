@@ -2,7 +2,8 @@
 //
 // Each response carries two validators:
 //   ETag          - a hash of the exact response body, so it changes whenever
-//                   the body changes (a strong ETag: same bytes, same tag).
+//                   the body changes (a strong ETag: same bytes, same tag),
+//                   or a weak ETag for clock-dependent bodies (see below).
 //   Last-Modified - when the data last changed (updated_at), if the data has
 //                   that timestamp.
 // A client that sends one back (If-None-Match / If-Modified-Since) and still has
@@ -10,9 +11,15 @@
 // the data again.
 const crypto = require('node:crypto');
 
-function sendConditional(req, res, body, lastModified) {
+const hash = (text) => crypto.createHash('sha256').update(text).digest('base64url');
+
+// options.weakEtagFrom: for a body that changes with the clock (e.g. a reading's
+// age in seconds), hash only the parts that matter instead and send a weak ETag
+// (W/"..."), which says "equivalent", not "byte-identical". Without it, every
+// request would get a new ETag and 304 could never happen.
+function sendConditional(req, res, body, lastModified, { weakEtagFrom } = {}) {
   const json = JSON.stringify(body);
-  const etag = `"${crypto.createHash('sha256').update(json).digest('base64url')}"`;
+  const etag = weakEtagFrom ? `W/"${hash(JSON.stringify(weakEtagFrom))}"` : `"${hash(json)}"`;
 
   res.set('ETag', etag);
   if (lastModified) res.set('Last-Modified', new Date(lastModified).toUTCString());

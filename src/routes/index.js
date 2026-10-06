@@ -6,6 +6,7 @@ const provinceRoutes = require('./provinces.routes');
 const districtRoutes = require('./districts.routes');
 const substationRoutes = require('./substations.routes');
 const installationRoutes = require('./installations.routes');
+const readingRoutes = require('./readings.routes');
 
 const router = express.Router();
 
@@ -16,5 +17,7 @@ router.use('/provinces', provinceRoutes);
 router.use('/districts', districtRoutes);
 router.use('/substations', substationRoutes);
 router.use('/installations', installationRoutes);
+// Readings across the estate; one installation's readings live under it.
+router.use('/readings', readingRoutes);
 
 module.exports = router;

@@ -9,13 +9,13 @@ const DEFAULT_PAGE_SIZE = 50;
 // A positive whole number written plainly: "2" is fine; "02", "2.5", "-1" and "2abc" are not.
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
 
-// options.filters maps each allowed filter name to a check that returns an
-// error message, or null if the value is fine. options.paginated allows page
-// and page_size. Any other parameter is rejected.
-function parseQuery(query, { filters = {}, paginated = false } = {}) {
+// options.params maps each allowed parameter (filters, sort, time window) to a
+// check that returns an error message, or null if the value is fine.
+// options.paginated also allows page and page_size. Anything else is rejected.
+function parseQuery(query, { params = {}, paginated = false } = {}) {
   const details = [];
   const problem = (parameter, message) => details.push({ parameter, message });
-  const allowed = new Set(Object.keys(filters));
+  const allowed = new Set(Object.keys(params));
   if (paginated) {
     allowed.add('page');
     allowed.add('page_size');
@@ -30,13 +30,14 @@ function parseQuery(query, { filters = {}, paginated = false } = {}) {
     }
   }
 
-  const result = { filters: {} };
-  for (const [name, check] of Object.entries(filters)) {
+  // result.params holds only the parameters the client sent, once validated.
+  const result = { params: {} };
+  for (const [name, check] of Object.entries(params)) {
     const value = query[name];
     if (typeof value !== 'string') continue;
     const message = check(value);
     if (message) problem(name, message);
-    else result.filters[name] = value;
+    else result.params[name] = value;
   }
 
   if (paginated) {

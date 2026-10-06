@@ -1,27 +1,23 @@
 const installationService = require('../services/installation.service');
-const { serializeInstallation } = require('../serializers');
+const { serializeInstallation, serializeReading, serializeReference } = require('../serializers');
+const check = require('./query-params');
 const { parseQuery } = require('../utils/query');
 const { sendResource, sendCollection } = require('../utils/respond');
+const sendConditional = require('../utils/conditional-get');
 const AppError = require('../utils/app-error');
 
-const STATUSES = ['active', 'inactive', 'maintenance'];
-
-// A filter check that accepts values matching `pattern`.
-const matches = (pattern, message) => (value) => (pattern.test(value) ? null : message);
-
-// Filters for GET /installations. Values are checked for form, not existence:
-// a well-formed id that matches nothing simply returns an empty page.
+// Filters for GET /installations.
 const INSTALLATION_FILTERS = {
-  province_id: matches(/^[A-Z]{2}$/, 'must be a province id such as WP'),
-  district_id: matches(/^[A-Z]{3}$/, 'must be a district id such as COL'),
-  substation_id: matches(/^SUB-[0-9]+$/, 'must be a substation id such as SUB-001'),
-  status: (value) => (STATUSES.includes(value) ? null : `must be one of ${STATUSES.join(', ')}`),
+  province_id: check.provinceId,
+  district_id: check.districtId,
+  substation_id: check.substationId,
+  status: check.status,
 };
 
 // GET /installations
 async function listInstallations(req, res) {
-  const query = parseQuery(req.query, { paginated: true, filters: INSTALLATION_FILTERS });
-  const page = await installationService.listInstallations(query.filters, query);
+  const query = parseQuery(req.query, { paginated: true, params: INSTALLATION_FILTERS });
+  const page = await installationService.listInstallations(query.params, query);
   sendCollection(req, res, page, query, serializeInstallation);
 }
 
@@ -45,4 +41,38 @@ async function getInstallation(req, res) {
   sendResource(req, res, installation, serializeInstallation);
 }
 
-module.exports = { listInstallations, listInstallationsOnSubstation, getInstallation };
+// GET /installations/{installation_id}/overview: everything an operations
+// screen needs for one installation, in one response.
+async function getOverview(req, res) {
+  parseQuery(req.query);
+  const overview = await installationService.getOverview(req.params.installation_id);
+  if (!overview) {
+    throw AppError.notFound(`Installation "${req.params.installation_id}" not found`);
+  }
+  const { installation, substation, district, province, lastReading, energyToday } = overview;
+
+  const body = {
+    installation: serializeInstallation(installation),
+    substation: serializeReference(substation),
+    district: serializeReference(district),
+    province: serializeReference(province),
+    last_reading: lastReading ? serializeReading(lastReading) : null,
+    today: { date: energyToday.date, energy_kwh: energyToday.energyKwh },
+  };
+
+  // The overview last changed at the latest of: the installation's update, its
+  // newest reading, and local midnight (when "today" restarts at zero).
+  const lastModified = Math.max(
+    Date.parse(installation.updated_at),
+    lastReading ? Date.parse(lastReading.timestamp) : 0,
+    energyToday.startMs,
+  );
+  sendConditional(req, res, body, lastModified);
+}
+
+module.exports = {
+  listInstallations,
+  listInstallationsOnSubstation,
+  getInstallation,
+  getOverview,
+};

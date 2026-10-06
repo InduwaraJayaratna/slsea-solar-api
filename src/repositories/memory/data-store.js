@@ -33,4 +33,10 @@ for (const readings of readingsByInstallation.values()) {
   readings.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 }
 
-module.exports = { collections, byId, readingsByInstallation };
+// Every reading in time order, for estate-wide queries. Readings that share a
+// timestamp are ordered by id, so the order (and so each page) is always the same.
+const compareReadings = (a, b) =>
+  a.timestamp.localeCompare(b.timestamp) || a.id.localeCompare(b.id);
+const readingsByTime = [...collections.readings].sort(compareReadings);
+
+module.exports = { collections, byId, readingsByInstallation, readingsByTime, compareReadings };
