@@ -90,7 +90,8 @@ data/seed/          seed JSON, one array per collection
 Base path: `/api/v1`. The API speaks JSON only.
 
 Paths below are relative to `/api/v1`. Every GET except `/health` needs a user
-access token (see [Authentication](#authentication)).
+access token (see [Authentication](#authentication)); writes are covered in
+[Writes](#writes).
 
 | Method | Path                                                     | Returns                                                                                 |
 | ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -109,6 +110,12 @@ access token (see [Authentication](#authentication)).
 | GET    | `/installations/{installation_id}/readings`              | the installation's reading history (collection)                                         |
 | GET    | `/installations/{installation_id}/readings/{reading_id}` | one reading                                                                             |
 | GET    | `/readings`                                              | readings across the estate (collection, filterable)                                     |
+| POST   | `/auth/tokens`                                           | sign in: an access token (open, no token needed)                                        |
+| POST   | `/installations/{installation_id}/readings`              | a device reports a reading (device key)                                                 |
+| POST   | `/substations/{substation_id}/installations`             | create an installation (admin)                                                          |
+| PUT    | `/installations/{installation_id}`                       | replace an installation's editable fields (admin)                                       |
+| PATCH  | `/installations/{installation_id}`                       | change some of its fields (admin)                                                       |
+| DELETE | `/installations/{installation_id}`                       | delete an installation that has no readings (admin)                                     |
 
 A nested collection returns 404 if its parent does not exist, and 200 with an empty
 `data` array if the parent exists but has no children.
@@ -140,8 +147,72 @@ curl http://localhost:3000/api/v1/installations -H 'Authorization: Bearer eyJ...
 is hashed with SHA-256 and compared, in constant time, with the stored hash of the
 installation in the URL. A missing or unknown key gets 401; a valid key for a
 different installation gets 403. Device keys do not work on read endpoints, and user
-tokens do not work on device endpoints. (The device middleware is in place; the
-ingestion endpoint that uses it comes later.)
+tokens do not work on device endpoints.
+
+### Writes
+
+**Ingestion.** A device posts one reading at a time:
+
+```sh
+curl -X POST http://localhost:3000/api/v1/installations/INST-0001/readings \
+  -H 'X-Device-Key: dk_...' -H 'Content-Type: application/json' \
+  -d '{"timestamp": "2026-10-06T06:15:00Z", "power_kw": 3.2, "energy_kwh": 15340.5, "voltage_v": 231.0}'
+```
+
+- 201 with the reading as the body, and `Location` pointing at it.
+- `timestamp`: an ISO 8601 UTC date-time on a whole minute, at most 5 minutes in the
+  future. `power_kw` and `energy_kwh` must be at least 0; `voltage_v` must be above 0.
+- The reading id is the installation id plus the timestamp (`INST-0001-20261006T0615Z`),
+  so a device retrying a reading gets 409 `DUPLICATE_READING` instead of a duplicate.
+- 409 `ENERGY_DECREASED` if `energy_kwh` would make the meter total go backwards;
+  409 `INSTALLATION_NOT_ACTIVE` if the installation is inactive or under maintenance.
+- Readings are append-only: PUT, PATCH and DELETE on readings return 405.
+
+**Installation management (admin only).** Other roles get 403; a device key gets 401.
+
+- `POST /substations/{substation_id}/installations` creates one: 201 with `Location`.
+  The server sets the id, the substation/district/province, and a new device key.
+  **The plaintext `device_key` is in this response only** (it is stored only as a
+  hash and can never be fetched again). A `meter_id` or `inverter_id` already in
+  use gets 409.
+- `PUT /installations/{installation_id}` replaces all editable fields (every field is
+  required). Sending the same PUT twice gives the same result.
+- `PATCH /installations/{installation_id}` changes only the fields sent, e.g.
+  `{"status": "inactive"}`. Read-only fields (`id`, `substation_id`, `district_id`,
+  `province_id`, `created_at`, `updated_at`) and unknown fields get 400.
+- `DELETE /installations/{installation_id}` gets 204, and 404 if repeated. An
+  installation with readings cannot be deleted (409 `INSTALLATION_HAS_READINGS`): set
+  its status to `inactive` instead, so its history is kept.
+
+Editable fields: `meter_id`, `inverter_id`, `site_name`, `address`, `capacity_kw`
+(above 0, at most 100), `panel_count` (whole number, at least 1), `status`,
+`commissioned_at` (UTC date-time), `latitude` and `longitude` (within Sri Lanka).
+
+**Optimistic concurrency.** PUT, PATCH and DELETE honour `If-Match`. Send the ETag
+from your last GET; if someone else has changed the installation since, you get
+**412 Precondition Failed** instead of overwriting their change. Successful writes
+return the new `ETag` and `Last-Modified`.
+
+Invalid bodies get 400 with one `details` entry per bad field:
+
+```json
+{
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Invalid request body",
+    "details": [
+      { "field": "power_kw", "message": "must be at least 0" },
+      { "field": "voltage_v", "message": "is required" }
+    ]
+  }
+}
+```
+
+**Provinces, districts and substations are read-only reference data:** POST, PUT,
+PATCH and DELETE on them return 405.
+
+In memory mode (`DATA_SOURCE=memory`), writes change only the in-memory data. They
+are lost when the server restarts, and the seed files are never modified.
 
 ### Jurisdiction
 
@@ -297,17 +368,23 @@ Every error uses the same body:
 `code` is stable, so programs can check it. `message` is for people. `details` lists
 specifics (for example, one entry per invalid field) and is otherwise empty.
 
-| Status | Code                     | When                                                                                                             |
-| ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| 400    | `BAD_REQUEST`            | invalid query parameter, or a body that is not valid JSON                                                        |
-| 401    | `UNAUTHORIZED`           | missing, malformed or expired token, wrong login, or bad device key; `WWW-Authenticate` says how to authenticate |
-| 403    | `FORBIDDEN`              | the resource exists but is outside your jurisdiction (or the device key is for another installation)             |
-| 404    | `NOT_FOUND`              | no route at that path, or the resource (or its parent) does not exist                                            |
-| 405    | `METHOD_NOT_ALLOWED`     | path exists but not for this method; `Allow` header lists methods                                                |
-| 406    | `NOT_ACCEPTABLE`         | `Accept` header rules out `application/json`                                                                     |
-| 413    | `PAYLOAD_TOO_LARGE`      | body bigger than `BODY_LIMIT`                                                                                    |
-| 415    | `UNSUPPORTED_MEDIA_TYPE` | POST/PUT/PATCH body that is not `application/json`                                                               |
-| 500    | `INTERNAL_ERROR`         | unexpected error; details are logged, never returned                                                             |
+| Status | Code                        | When                                                                                                             |
+| ------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 400    | `BAD_REQUEST`               | invalid query parameter, invalid body field, or a body that is not valid JSON                                    |
+| 401    | `UNAUTHORIZED`              | missing, malformed or expired token, wrong login, or bad device key; `WWW-Authenticate` says how to authenticate |
+| 403    | `FORBIDDEN`                 | the resource exists but is outside your jurisdiction (or the device key is for another installation)             |
+| 404    | `NOT_FOUND`                 | no route at that path, or the resource (or its parent) does not exist                                            |
+| 405    | `METHOD_NOT_ALLOWED`        | path exists but not for this method; `Allow` header lists methods                                                |
+| 406    | `NOT_ACCEPTABLE`            | `Accept` header rules out `application/json`                                                                     |
+| 409    | `CONFLICT`                  | a `meter_id` or `inverter_id` already in use                                                                     |
+| 409    | `DUPLICATE_READING`         | a reading for that installation and time already exists                                                          |
+| 409    | `ENERGY_DECREASED`          | `energy_kwh` would make the meter total go backwards                                                             |
+| 409    | `INSTALLATION_NOT_ACTIVE`   | readings sent to an installation that is not active                                                              |
+| 409    | `INSTALLATION_HAS_READINGS` | deleting an installation that has readings (set it inactive instead)                                             |
+| 412    | `PRECONDITION_FAILED`       | `If-Match` does not match the current ETag                                                                       |
+| 413    | `PAYLOAD_TOO_LARGE`         | body bigger than `BODY_LIMIT`                                                                                    |
+| 415    | `UNSUPPORTED_MEDIA_TYPE`    | POST/PUT/PATCH body that is not `application/json`                                                               |
+| 500    | `INTERNAL_ERROR`            | unexpected error; details are logged, never returned                                                             |
 
 ## Data model and seed data
 
@@ -351,6 +428,7 @@ is git-ignored.
 | 4    | Hierarchy read path and conditional GET | Done   |
 | 5    | Operational and analytical reads        | Done   |
 | 6    | Authentication and jurisdiction scoping | Done   |
+| 7    | Write path and CRUD semantics           | Done   |
 
 ## AI disclosure
 

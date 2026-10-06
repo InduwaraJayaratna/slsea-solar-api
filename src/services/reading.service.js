@@ -6,6 +6,7 @@ const { sriLankaDay } = require('../utils/sri-lanka-time');
 const { scopeOf, assertFiltersAccessible } = require('./jurisdiction');
 const { getInstallation } = require('./installation.service');
 const AppError = require('../utils/app-error');
+const { DuplicateKeyError } = require('../repositories/errors');
 
 // A reading older than this is stale: the installation should report every
 // 15 minutes, so 30 minutes means at least one report is missing.
@@ -122,7 +123,91 @@ async function getEnergyToday(installationId) {
   return { date: day.date, startMs: day.startMs, energyKwh };
 }
 
+// Readings may be timestamped at most this far ahead of the server's clock, to
+// allow for a device clock that runs slightly fast.
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+// A reading's id is its installation plus its compact UTC time, e.g.
+// INST-0001-20261005T0615Z. So the same reading sent twice gets the same id,
+// and the second copy is refused instead of stored twice.
+function readingIdFor(installationId, timestamp) {
+  const compact = `${timestamp.slice(0, 4)}${timestamp.slice(5, 7)}${timestamp.slice(8, 13)}${timestamp.slice(14, 16)}Z`;
+  return `${installationId}-${compact}`;
+}
+
+// The reading just before (or just after) `timestamp`, or null.
+async function neighbourReading(installationId, timestamp, direction) {
+  const range = direction === 'before' ? { to: timestamp } : { from: timestamp };
+  const { items } = await repositories.readings.findMany(
+    { installation_ids: [installationId], ...range },
+    { sort: direction === 'before' ? '-timestamp' : 'timestamp', limit: 1 },
+  );
+  return items[0] ?? null;
+}
+
+// Stores a reading sent by an installation's device. `fields` has already been
+// validated (timestamp, power_kw, energy_kwh, voltage_v); these are the checks
+// that depend on stored data or on the clock.
+async function ingestReading(installationId, fields) {
+  if (Date.parse(fields.timestamp) > clock.now() + MAX_CLOCK_SKEW_MS) {
+    throw AppError.badRequest('Invalid request body', [
+      { field: 'timestamp', message: 'must not be more than 5 minutes in the future' },
+    ]);
+  }
+
+  const installation = await repositories.installations.findById(installationId);
+  if (installation.status !== 'active') {
+    throw new AppError(
+      409,
+      'INSTALLATION_NOT_ACTIVE',
+      `Installation "${installationId}" is ${installation.status} and does not accept readings`,
+    );
+  }
+
+  const id = readingIdFor(installationId, fields.timestamp);
+  const duplicate = new AppError(
+    409,
+    'DUPLICATE_READING',
+    `A reading for ${fields.timestamp} already exists (${id})`,
+  );
+  if (await repositories.readings.findById(id)) throw duplicate;
+
+  // energy_kwh is the meter's running total, so it may never go down: it must
+  // be at least the previous reading's, and (for a late reading filling a gap)
+  // at most the next reading's.
+  const previous = await neighbourReading(installationId, fields.timestamp, 'before');
+  const next = await neighbourReading(installationId, fields.timestamp, 'after');
+  if (
+    (previous && fields.energy_kwh < previous.energy_kwh) ||
+    (next && fields.energy_kwh > next.energy_kwh)
+  ) {
+    const bound = previous && fields.energy_kwh < previous.energy_kwh ? previous : next;
+    throw new AppError(
+      409,
+      'ENERGY_DECREASED',
+      `energy_kwh ${fields.energy_kwh} would make the meter total go backwards ` +
+        `(reading ${bound.id} has ${bound.energy_kwh})`,
+    );
+  }
+
+  try {
+    return await repositories.readings.appendReading({
+      id,
+      installation_id: installationId,
+      timestamp: fields.timestamp,
+      power_kw: fields.power_kw,
+      energy_kwh: fields.energy_kwh,
+      voltage_v: fields.voltage_v,
+    });
+  } catch (error) {
+    // Another request stored the same reading between the check and the write.
+    if (error instanceof DuplicateKeyError) throw duplicate;
+    throw error;
+  }
+}
+
 module.exports = {
+  ingestReading,
   listInstallationReadings,
   listReadings,
   getInstallationReading,

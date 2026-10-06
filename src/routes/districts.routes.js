@@ -5,6 +5,8 @@ const methodNotAllowed = require('../middleware/method-not-allowed');
 const authenticateUser = require('../middleware/authenticate-user');
 
 const router = express.Router();
+// Provinces, districts and substations are reference data: read-only through
+// the API, so any write method gets 405.
 const readOnly = methodNotAllowed(['GET', 'HEAD']);
 
 router.route('/:district_id').get(authenticateUser, districts.getDistrict).all(readOnly);

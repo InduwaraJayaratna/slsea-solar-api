@@ -221,8 +221,13 @@ test('GET /installations/{installation_id} returns 404 for an unknown installati
   assertError(await api('/installations/INST-9999'), 404, 'NOT_FOUND');
 });
 
-test('write methods on read-only resources return 405', async () => {
-  const res = await request(app).delete('/api/v1/installations/INST-0001');
-  assertError(res, 405, 'METHOD_NOT_ALLOWED');
-  assert.equal(res.headers.allow, 'GET, HEAD');
+test('write methods on reference data return 405 with an Allow header', async () => {
+  const paths = ['/provinces', '/provinces/WP', '/districts/COL', '/substations/SUB-001'];
+  for (const path of paths) {
+    for (const method of ['post', 'put', 'patch', 'delete']) {
+      const res = await request(app)[method](`/api/v1${path}`).set('Authorization', ADMIN);
+      assertError(res, 405, 'METHOD_NOT_ALLOWED');
+      assert.equal(res.headers.allow, 'GET, HEAD', `${method} ${path}`);
+    }
+  }
 });
