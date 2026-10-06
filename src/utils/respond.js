@@ -1,7 +1,7 @@
 // The two ways a GET responds: a single resource as a bare JSON object, or a
 // page of a collection in the { data, pagination, links } envelope. Both go
 // through sendConditional, so every GET supports ETag and 304.
-const sendConditional = require('./conditional-get');
+const { sendConditional } = require('./conditional-get');
 const { buildCollectionBody } = require('./pagination');
 
 function sendResource(req, res, record, serialize) {

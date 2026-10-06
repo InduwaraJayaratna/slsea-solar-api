@@ -1,4 +1,5 @@
-// Conditional GET, implemented once for every retrievable resource and collection.
+// Conditional requests, implemented once for every resource and collection:
+// conditional GET (304 Not Modified) and, for writes, If-Match (412).
 //
 // Each response carries two validators:
 //   ETag          - a hash of the exact response body, so it changes whenever
@@ -11,7 +12,12 @@
 // the data again.
 const crypto = require('node:crypto');
 
+const AppError = require('./app-error');
+
 const hash = (text) => crypto.createHash('sha256').update(text).digest('base64url');
+
+// The strong ETag of a JSON body: what a GET of that representation sends.
+const strongEtag = (body) => `"${hash(JSON.stringify(body))}"`;
 
 // options.weakEtagFrom: for a body that changes with the clock (e.g. a reading's
 // age in seconds), hash only the parts that matter instead and send a weak ETag
@@ -19,7 +25,7 @@ const hash = (text) => crypto.createHash('sha256').update(text).digest('base64ur
 // request would get a new ETag and 304 could never happen.
 function sendConditional(req, res, body, lastModified, { weakEtagFrom } = {}) {
   const json = JSON.stringify(body);
-  const etag = weakEtagFrom ? `W/"${hash(JSON.stringify(weakEtagFrom))}"` : `"${hash(json)}"`;
+  const etag = weakEtagFrom ? `W/"${hash(JSON.stringify(weakEtagFrom))}"` : strongEtag(body);
 
   res.set('ETag', etag);
   if (lastModified) res.set('Last-Modified', new Date(lastModified).toUTCString());
@@ -35,4 +41,24 @@ function sendConditional(req, res, body, lastModified, { weakEtagFrom } = {}) {
   res.type('application/json').send(json);
 }
 
-module.exports = sendConditional;
+// Optimistic concurrency for writes (PUT, PATCH, DELETE). A client sends
+// If-Match with the ETag it last read; if the resource has changed since, its
+// current ETag differs and the write is refused with 412, instead of silently
+// overwriting someone else's change. `currentBody` is the resource's current
+// representation (what a GET would return).
+//
+// No If-Match header: the write goes ahead. "*" matches any existing resource.
+// RFC 9110 requires strong comparison for If-Match, so a weak W/"..." tag
+// never matches.
+function assertIfMatch(req, currentBody) {
+  const header = req.get('If-Match');
+  if (!header || header.trim() === '*') return;
+  const tags = header.split(',').map((tag) => tag.trim());
+  if (!tags.includes(strongEtag(currentBody))) {
+    throw AppError.preconditionFailed(
+      'The resource has changed since you read it: fetch it again and retry with the new ETag',
+    );
+  }
+}
+
+module.exports = { sendConditional, strongEtag, assertIfMatch };
