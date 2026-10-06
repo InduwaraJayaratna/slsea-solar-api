@@ -25,7 +25,9 @@ rooftop installations.
 
 - Routes map URLs and verbs to controllers.
 - Controllers handle HTTP: read the request, call a service, shape the response.
-- Services hold business rules and know nothing about HTTP.
+- Services hold business rules, including access checks. They never touch `req`/`res`;
+  they signal "not found" or "forbidden" by throwing `AppError`, which the error
+  handler turns into a response.
 - Only repositories touch the data source, so the data source can be swapped later
   without changing the layers above.
 

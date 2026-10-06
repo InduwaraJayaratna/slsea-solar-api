@@ -3,9 +3,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const app = require('./helpers/app');
+const { bearer } = require('./helpers/auth');
 const seedInstallations = require('../data/seed/installations.json');
 
-const api = (path) => request(app).get(`/api/v1${path}`);
+// Every read needs a token; admin sees everything, so these tests are not
+// affected by jurisdiction (tested in jurisdiction.test.js).
+const ADMIN = bearer('admin');
+const api = (path) => request(app).get(`/api/v1${path}`).set('Authorization', ADMIN);
 
 test('responses carry a strong ETag and Cache-Control: private, no-cache', async () => {
   for (const path of [

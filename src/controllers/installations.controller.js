@@ -1,10 +1,10 @@
 const installationService = require('../services/installation.service');
+const overviewService = require('../services/overview.service');
 const { serializeInstallation, serializeReading, serializeReference } = require('../serializers');
 const check = require('./query-params');
 const { parseQuery } = require('../utils/query');
 const { sendResource, sendCollection } = require('../utils/respond');
 const sendConditional = require('../utils/conditional-get');
-const AppError = require('../utils/app-error');
 
 // Filters for GET /installations.
 const INSTALLATION_FILTERS = {
@@ -17,7 +17,7 @@ const INSTALLATION_FILTERS = {
 // GET /installations
 async function listInstallations(req, res) {
   const query = parseQuery(req.query, { paginated: true, params: INSTALLATION_FILTERS });
-  const page = await installationService.listInstallations(query.params, query);
+  const page = await installationService.listInstallations(req.user, query.params, query);
   sendCollection(req, res, page, query, serializeInstallation);
 }
 
@@ -25,19 +25,19 @@ async function listInstallations(req, res) {
 async function listInstallationsOnSubstation(req, res) {
   const query = parseQuery(req.query, { paginated: true });
   const page = await installationService.listInstallationsOnSubstation(
+    req.user,
     req.params.substation_id,
     query,
   );
-  if (!page) throw AppError.notFound(`Substation "${req.params.substation_id}" not found`);
   sendCollection(req, res, page, query, serializeInstallation);
 }
 
 async function getInstallation(req, res) {
   parseQuery(req.query);
-  const installation = await installationService.getInstallation(req.params.installation_id);
-  if (!installation) {
-    throw AppError.notFound(`Installation "${req.params.installation_id}" not found`);
-  }
+  const installation = await installationService.getInstallation(
+    req.user,
+    req.params.installation_id,
+  );
   sendResource(req, res, installation, serializeInstallation);
 }
 
@@ -45,11 +45,8 @@ async function getInstallation(req, res) {
 // screen needs for one installation, in one response.
 async function getOverview(req, res) {
   parseQuery(req.query);
-  const overview = await installationService.getOverview(req.params.installation_id);
-  if (!overview) {
-    throw AppError.notFound(`Installation "${req.params.installation_id}" not found`);
-  }
-  const { installation, substation, district, province, lastReading, energyToday } = overview;
+  const { installation, substation, district, province, lastReading, energyToday } =
+    await overviewService.getOverview(req.user, req.params.installation_id);
 
   const body = {
     installation: serializeInstallation(installation),

@@ -1,15 +1,21 @@
 const repositories = require('../repositories');
 const { paginate } = require('../utils/pagination');
+const { assertAccess, locationOf } = require('./jurisdiction');
+const { getDistrict } = require('./district.service');
+const AppError = require('../utils/app-error');
 
-// The substations of one district; null if the district does not exist.
-async function listSubstationsInDistrict(districtId, paging) {
-  if (!(await repositories.districts.findById(districtId))) return null;
+// The substations of one district. If the user may see the district, they may
+// see everything in it, so the district check is enough.
+async function listSubstationsInDistrict(user, districtId, paging) {
+  await getDistrict(user, districtId);
   return paginate(await repositories.substations.findAll({ district_id: districtId }), paging);
 }
 
-// null if there is no such substation.
-async function getSubstation(substationId) {
-  return repositories.substations.findById(substationId);
+async function getSubstation(user, substationId) {
+  const substation = await repositories.substations.findById(substationId);
+  if (!substation) throw AppError.notFound(`Substation "${substationId}" not found`);
+  assertAccess(user, await locationOf.substation(substation), `Substation "${substationId}"`);
+  return substation;
 }
 
 module.exports = { listSubstationsInDistrict, getSubstation };

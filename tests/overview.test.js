@@ -3,13 +3,17 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const app = require('./helpers/app');
+const { bearer } = require('./helpers/auth');
 const assertError = require('./helpers/assert-error');
 const clock = require('../src/utils/clock');
 const repositories = require('../src/repositories');
 const seedInstallations = require('../data/seed/installations.json');
 const seedReadings = require('../data/seed/readings.json');
 
-const api = (path) => request(app).get(`/api/v1${path}`);
+// Every read needs a token; admin sees everything, so these tests are not
+// affected by jurisdiction (tested in jurisdiction.test.js).
+const ADMIN = bearer('admin');
+const api = (path) => request(app).get(`/api/v1${path}`).set('Authorization', ADMIN);
 const ACTIVE = seedInstallations.find((i) => i.status === 'active').id;
 const readingsOf = (id) => seedReadings.filter((r) => r.installation_id === id);
 

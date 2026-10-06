@@ -46,31 +46,29 @@ function parseReadingQuery(query, extraParams = {}) {
 async function listInstallationReadings(req, res) {
   const { filters, options } = parseReadingQuery(req.query);
   const page = await readingService.listInstallationReadings(
+    req.user,
     req.params.installation_id,
     filters,
     options,
   );
-  if (!page) throw AppError.notFound(`Installation "${req.params.installation_id}" not found`);
   sendCollection(req, res, page, options, serializeReading);
 }
 
 // GET /readings
 async function listReadings(req, res) {
   const { filters, options } = parseReadingQuery(req.query, JURISDICTION_FILTERS);
-  const page = await readingService.listReadings(filters, options);
+  const page = await readingService.listReadings(req.user, filters, options);
   sendCollection(req, res, page, options, serializeReading);
 }
 
 // GET /installations/{installation_id}/readings/{reading_id}
 async function getInstallationReading(req, res) {
   parseQuery(req.query);
-  const { installation_id: installationId, reading_id: readingId } = req.params;
-  const reading = await readingService.getInstallationReading(installationId, readingId);
-  if (!reading) {
-    throw AppError.notFound(
-      `Reading "${readingId}" not found for installation "${installationId}"`,
-    );
-  }
+  const reading = await readingService.getInstallationReading(
+    req.user,
+    req.params.installation_id,
+    req.params.reading_id,
+  );
   // Readings are append-only and never change, so their timestamp is their Last-Modified.
   sendConditional(req, res, serializeReading(reading), reading.timestamp);
 }
@@ -79,16 +77,11 @@ async function getInstallationReading(req, res) {
 // latest reading plus how old it is.
 async function getLastReading(req, res) {
   parseQuery(req.query);
-  const installationId = req.params.installation_id;
-  const result = await readingService.getLastReading(installationId);
-  if (!result.installation) throw AppError.notFound(`Installation "${installationId}" not found`);
-  if (!result.reading) {
-    // A distinct code, so a client can tell "no such installation" apart
-    // from "installation exists but has not reported yet".
-    throw new AppError(404, 'NO_READINGS', `Installation "${installationId}" has no readings yet`);
-  }
-
-  const { reading, age_seconds: ageSeconds, stale } = result;
+  const {
+    reading,
+    age_seconds: ageSeconds,
+    stale,
+  } = await readingService.getLastReading(req.user, req.params.installation_id);
   const body = { ...serializeReading(reading), age_seconds: ageSeconds, stale };
 
   // age_seconds changes every second, so the ETag is a weak one built from
