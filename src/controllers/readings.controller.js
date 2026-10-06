@@ -3,8 +3,10 @@ const { serializeReading } = require('../serializers');
 const check = require('./query-params');
 const { parseQuery } = require('../utils/query');
 const { sendCollection } = require('../utils/respond');
-const sendConditional = require('../utils/conditional-get');
+const { sendConditional } = require('../utils/conditional-get');
 const AppError = require('../utils/app-error');
+const validateBody = require('../utils/validate-body');
+const { READING } = require('./body-schemas');
 
 // Parameters both reading collections accept, besides page and page_size.
 const READING_PARAMS = {
@@ -92,7 +94,22 @@ async function getLastReading(req, res) {
   sendConditional(req, res, body, lastModified, { weakEtagFrom: { id: reading.id, stale } });
 }
 
+// POST /installations/{installation_id}/readings: a metering device reports a
+// reading. authenticateDevice has already checked the key and set req.device.
+async function ingestReading(req, res) {
+  parseQuery(req.query);
+  const fields = validateBody(req.body, READING);
+  const { installation_id: installationId } = req.device;
+  const reading = await readingService.ingestReading(installationId, fields);
+
+  res
+    .status(201)
+    .location(`/api/v1/installations/${installationId}/readings/${reading.id}`)
+    .json(serializeReading(reading));
+}
+
 module.exports = {
+  ingestReading,
   listInstallationReadings,
   listReadings,
   getInstallationReading,

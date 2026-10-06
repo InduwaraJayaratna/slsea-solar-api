@@ -4,7 +4,9 @@ const { serializeInstallation, serializeReading, serializeReference } = require(
 const check = require('./query-params');
 const { parseQuery } = require('../utils/query');
 const { sendResource, sendCollection } = require('../utils/respond');
-const sendConditional = require('../utils/conditional-get');
+const { sendConditional, strongEtag, assertIfMatch } = require('../utils/conditional-get');
+const validateBody = require('../utils/validate-body');
+const { INSTALLATION, INSTALLATION_READ_ONLY } = require('./body-schemas');
 
 // Filters for GET /installations.
 const INSTALLATION_FILTERS = {
@@ -67,9 +69,72 @@ async function getOverview(req, res) {
   sendConditional(req, res, body, lastModified);
 }
 
+// POST /substations/{substation_id}/installations (admin)
+async function createInstallation(req, res) {
+  parseQuery(req.query);
+  const fields = validateBody(req.body, INSTALLATION, { readOnly: INSTALLATION_READ_ONLY });
+  const { installation, deviceKey } = await installationService.createInstallation(
+    req.user,
+    req.params.substation_id,
+    fields,
+  );
+
+  const representation = serializeInstallation(installation);
+  res
+    .status(201)
+    .location(`/api/v1/installations/${installation.id}`)
+    // The ETag is that of the installation as GET returns it (without the key),
+    // so the client can use it in If-Match straight away.
+    .set('ETag', strongEtag(representation))
+    .set('Last-Modified', new Date(installation.updated_at).toUTCString())
+    // The body holds the plaintext device key: no cache may keep a copy.
+    .set('Cache-Control', 'no-store')
+    // The only time the plaintext key is ever sent; it cannot be fetched again.
+    .json({ ...representation, device_key: deviceKey });
+}
+
+// PUT and PATCH share everything except validation: PUT must send every
+// editable field (a full replacement), PATCH only the ones to change.
+function updateHandler({ partial }) {
+  return async (req, res) => {
+    parseQuery(req.query);
+    const changes = validateBody(req.body, INSTALLATION, {
+      partial,
+      readOnly: INSTALLATION_READ_ONLY,
+    });
+    const { installation_id: installationId } = req.params;
+
+    const current = await installationService.getInstallation(req.user, installationId);
+    assertIfMatch(req, serializeInstallation(current));
+    const updated = await installationService.updateInstallation(req.user, installationId, changes);
+    // Sends the new ETag and Last-Modified with the updated resource.
+    sendConditional(req, res, serializeInstallation(updated), updated.updated_at);
+  };
+}
+
+// PUT /installations/{installation_id} (admin)
+const replaceInstallation = updateHandler({ partial: false });
+
+// PATCH /installations/{installation_id} (admin)
+const patchInstallation = updateHandler({ partial: true });
+
+// DELETE /installations/{installation_id} (admin)
+async function deleteInstallation(req, res) {
+  parseQuery(req.query);
+  const { installation_id: installationId } = req.params;
+  const current = await installationService.getInstallation(req.user, installationId);
+  assertIfMatch(req, serializeInstallation(current));
+  await installationService.deleteInstallation(req.user, installationId);
+  res.status(204).end();
+}
+
 module.exports = {
   listInstallations,
   listInstallationsOnSubstation,
   getInstallation,
   getOverview,
+  createInstallation,
+  replaceInstallation,
+  patchInstallation,
+  deleteInstallation,
 };
