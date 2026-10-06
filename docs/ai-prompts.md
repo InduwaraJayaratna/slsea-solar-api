@@ -118,3 +118,37 @@ Summary of what was generated:
 - Express 5 app (`src/app.js`, `src/server.js`) with config, routes, controllers, services, middleware and utils folders; `GET /api/v1/health` reports status, version, data source and record counts.
 - Memory repositories that load `data/seed/` once, index by id and group readings by installation; all methods async, selected by `DATA_SOURCE`.
 - Middleware for request id, logging, body limit, content negotiation (406/415/400), 404, 405 with Allow, and one error contract via `AppError`; 22 tests.
+
+## Step 4 - Hierarchy read path and conditional GET
+
+Date: 2026-10-06
+
+Prompt:
+
+```text
+Step 4 - Read path for the hierarchy, with conditional GET. All endpoints are open for now; authentication comes in Step 6.
+
+Implement these GET endpoints (routes -> controllers -> services -> repositories):
+- /provinces and /provinces/{province_id}
+- /provinces/{province_id}/districts (scoped collection) and /districts/{district_id}
+- /districts/{district_id}/substations (scoped collection) and /substations/{substation_id}
+- /substations/{substation_id}/installations (scoped collection), /installations (whole-estate collection with filters province_id, district_id, substation_id, status) and /installations/{installation_id}
+
+Rules:
+- Plural lowercase nouns, no verbs in URIs. A scoped collection returns 404 if the parent does not exist, and 200 with an empty array if the parent exists but has no children.
+- Never return device_key_hash or any internal field. Use an explicit serializer per resource.
+- Collections return {"data": [...], "pagination": {...}, "links": {...}} through one shared pagination helper: page (default 1) and page_size (default 50, max 200). pagination has total, page, page_size, total_pages. links has self, first, last, next, prev (null when absent) and must preserve the other query parameters. Also send a Link header with rel="next" and rel="prev". An invalid page or page_size returns 400 with details naming the parameter.
+- Atomic resources return the bare JSON object.
+- Conditional GET on every retrievable resource and collection: send a strong ETag (hash of the response body) and Last-Modified (the resource's updated_at, or the newest updated_at in the collection). Honour If-None-Match and If-Modified-Since and return 304 with an empty body when the client's copy is current. Implement this once as a reusable helper, not per route. Send Cache-Control: private, no-cache so clients always revalidate.
+- Unknown query parameters and invalid filter values return 400.
+
+Tests: each collection and atomic resource; parent not found; pagination links and totals matching the seed (9 provinces, 25 districts, 200 installations); and a 304 round trip using the ETag from a first response.
+
+Then do the step wrap-up as Step 4 - Hierarchy read path and conditional GET.
+```
+
+Summary of what was generated:
+
+- GET endpoints for provinces, districts, substations and installations (atomic, scoped and estate-wide with filters), each through routes, controllers, services and repositories, with explicit allow-list serializers.
+- Shared helpers: query validation (unknown, repeated and invalid parameters give 400 naming each one), pagination envelope with links and a Link header, and conditional GET (SHA-256 ETag, Last-Modified, 304, `Cache-Control: private, no-cache`).
+- 71 tests in total, covering every endpoint, missing parents, empty children, pagination totals and links, query validation and 304 round trips.
