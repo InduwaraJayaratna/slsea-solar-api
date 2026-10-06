@@ -44,9 +44,27 @@ function serializeInstallation(installation) {
   };
 }
 
+function serializeReading(reading) {
+  return {
+    id: reading.id,
+    installation_id: reading.installation_id,
+    timestamp: reading.timestamp,
+    power_kw: reading.power_kw,
+    energy_kwh: reading.energy_kwh,
+    voltage_v: reading.voltage_v,
+  };
+}
+
+// A short reference to a parent resource, for embedding (e.g. in an overview).
+function serializeReference(record) {
+  return { id: record.id, name: record.name };
+}
+
 module.exports = {
   serializeProvince,
   serializeDistrict,
   serializeSubstation,
   serializeInstallation,
+  serializeReading,
+  serializeReference,
 };
