@@ -14,7 +14,9 @@ rooftop installations report, both as they arrive (real-time) and over time
 ## Stack
 
 - Node.js 22 (see `.nvmrc`), CommonJS
-- Express 5, with morgan (request logs) and dotenv (`.env` loading)
+- Express 5, with morgan (request logs), dotenv (`.env` loading), helmet (security
+  headers) and cors
+- Auth: jsonwebtoken (HS256 access tokens), bcryptjs (password hashes)
 - JSON only; `snake_case` fields and query parameters; ISO 8601 UTC timestamps
 - Layering: routes -> controllers -> services -> repositories
 - Tests: `node:test` + `supertest`
@@ -44,15 +46,24 @@ npm test       # node:test + supertest: everything in tests/, including the seed
 
 Then try `curl http://localhost:3000/api/v1/health`.
 
-Configuration: copy `.env.example` to `.env` if you want to change a default. Every
-setting is optional:
+Configuration: copy `.env.example` to `.env`. `JWT_SECRET` is required: the server
+refuses to start without one (at least 32 characters). Generate one with:
 
-| Variable      | Default       | Meaning                                                     |
-| ------------- | ------------- | ----------------------------------------------------------- |
-| `NODE_ENV`    | `development` | `test` turns off request logging                            |
-| `PORT`        | `3000`        | port the server listens on                                  |
-| `DATA_SOURCE` | `memory`      | where repositories read from (`memory` = `data/seed/` JSON) |
-| `BODY_LIMIT`  | `100kb`       | largest JSON request body accepted                          |
+```sh
+node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+```
+
+Everything else is optional:
+
+| Variable         | Default         | Meaning                                                     |
+| ---------------- | --------------- | ----------------------------------------------------------- |
+| `NODE_ENV`       | `development`   | `test` turns off request logging                            |
+| `PORT`           | `3000`          | port the server listens on                                  |
+| `DATA_SOURCE`    | `memory`        | where repositories read from (`memory` = `data/seed/` JSON) |
+| `BODY_LIMIT`     | `100kb`         | largest JSON request body accepted                          |
+| `JWT_SECRET`     | none (required) | secret for signing access tokens (HS256)                    |
+| `JWT_EXPIRES_IN` | `1h`            | access token lifetime (`3600`, `1h`, `30m`)                 |
+| `CORS_ORIGIN`    | `*`             | origin browsers may call the API from                       |
 
 ## Project structure
 
@@ -78,8 +89,8 @@ data/seed/          seed JSON, one array per collection
 
 Base path: `/api/v1`. The API speaks JSON only.
 
-All endpoints are open for now; authentication arrives in Step 6. Paths below are
-relative to `/api/v1`.
+Paths below are relative to `/api/v1`. Every GET except `/health` needs a user
+access token (see [Authentication](#authentication)).
 
 | Method | Path                                                     | Returns                                                                                 |
 | ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -101,6 +112,54 @@ relative to `/api/v1`.
 
 A nested collection returns 404 if its parent does not exist, and 200 with an empty
 `data` array if the parent exists but has no children.
+
+### Authentication
+
+There are two kinds of client, each with its own scheme.
+
+**SLSEA users (read clients)** sign in for a JWT access token, then send it as a
+Bearer token:
+
+```sh
+curl -X POST http://localhost:3000/api/v1/auth/tokens \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "dist.col", "password": "SolarDemo#2026"}'
+# {"access_token": "eyJ...", "token_type": "Bearer", "expires_in": 3600}
+
+curl http://localhost:3000/api/v1/installations -H 'Authorization: Bearer eyJ...'
+```
+
+- The token (HS256, 1 hour) carries the user's id (`sub`), `role`, `province_id` and
+  `district_id`, so access checks need no database lookup.
+- A wrong username and a wrong password get the same 401, so logins do not reveal
+  which usernames exist.
+- A missing, malformed or expired token gets 401 with `WWW-Authenticate: Bearer`.
+- Demo logins are in [docs/demo-credentials.md](docs/demo-credentials.md).
+
+**Metering devices (write clients)** send their device key in `X-Device-Key`. The key
+is hashed with SHA-256 and compared, in constant time, with the stored hash of the
+installation in the URL. A missing or unknown key gets 401; a valid key for a
+different installation gets 403. Device keys do not work on read endpoints, and user
+tokens do not work on device endpoints. (The device middleware is in place; the
+ingestion endpoint that uses it comes later.)
+
+### Jurisdiction
+
+Every read is limited to the caller's jurisdiction:
+
+| Role                | Can read                                                              |
+| ------------------- | --------------------------------------------------------------------- |
+| `admin`, `national` | everything                                                            |
+| `provincial`        | their province and everything in it                                   |
+| `district`          | their district and everything in it, plus their province's own record |
+
+- A single resource, or a nested collection's parent, outside the jurisdiction gets
+  **403** (it exists, but is not yours). One that does not exist gets **404**.
+- Collections (`/provinces`, `/installations`, `/readings`, ...) are narrowed to the
+  jurisdiction automatically. For example, a Colombo district user's `/provinces`
+  returns only `WP`, and their `/installations` only Colombo's.
+- An explicit filter outside the jurisdiction (e.g. `?district_id=GAM` for a Colombo
+  user) gets 403.
 
 ### Collections and pagination
 
@@ -238,15 +297,17 @@ Every error uses the same body:
 `code` is stable, so programs can check it. `message` is for people. `details` lists
 specifics (for example, one entry per invalid field) and is otherwise empty.
 
-| Status | Code                     | When                                                                  |
-| ------ | ------------------------ | --------------------------------------------------------------------- |
-| 400    | `BAD_REQUEST`            | invalid query parameter, or a body that is not valid JSON             |
-| 404    | `NOT_FOUND`              | no route at that path, or the resource (or its parent) does not exist |
-| 405    | `METHOD_NOT_ALLOWED`     | path exists but not for this method; `Allow` header lists methods     |
-| 406    | `NOT_ACCEPTABLE`         | `Accept` header rules out `application/json`                          |
-| 413    | `PAYLOAD_TOO_LARGE`      | body bigger than `BODY_LIMIT`                                         |
-| 415    | `UNSUPPORTED_MEDIA_TYPE` | POST/PUT/PATCH body that is not `application/json`                    |
-| 500    | `INTERNAL_ERROR`         | unexpected error; details are logged, never returned                  |
+| Status | Code                     | When                                                                                                             |
+| ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| 400    | `BAD_REQUEST`            | invalid query parameter, or a body that is not valid JSON                                                        |
+| 401    | `UNAUTHORIZED`           | missing, malformed or expired token, wrong login, or bad device key; `WWW-Authenticate` says how to authenticate |
+| 403    | `FORBIDDEN`              | the resource exists but is outside your jurisdiction (or the device key is for another installation)             |
+| 404    | `NOT_FOUND`              | no route at that path, or the resource (or its parent) does not exist                                            |
+| 405    | `METHOD_NOT_ALLOWED`     | path exists but not for this method; `Allow` header lists methods                                                |
+| 406    | `NOT_ACCEPTABLE`         | `Accept` header rules out `application/json`                                                                     |
+| 413    | `PAYLOAD_TOO_LARGE`      | body bigger than `BODY_LIMIT`                                                                                    |
+| 415    | `UNSUPPORTED_MEDIA_TYPE` | POST/PUT/PATCH body that is not `application/json`                                                               |
+| 500    | `INTERNAL_ERROR`         | unexpected error; details are logged, never returned                                                             |
 
 ## Data model and seed data
 
@@ -289,6 +350,7 @@ is git-ignored.
 | 3    | Express skeleton and error contract     | Done   |
 | 4    | Hierarchy read path and conditional GET | Done   |
 | 5    | Operational and analytical reads        | Done   |
+| 6    | Authentication and jurisdiction scoping | Done   |
 
 ## AI disclosure
 

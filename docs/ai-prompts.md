@@ -188,3 +188,38 @@ Summary of what was generated:
 - Overview (installation, substation, district, province, last reading, energy today in Sri Lanka time) and last-reading (age_seconds, stale, 404 NO_READINGS, weak ETag) endpoints.
 - Reading history, single reading and estate-wide `/readings` (jurisdiction resolved to installation ids), with from/to windows, sort, pagination and conditional GET.
 - `readings.findMany(filter, { sort, skip, limit })` returning `{ items, total }` with binary-searched time windows, an injectable clock, and 107 tests in total.
+
+## Step 6 - Authentication and jurisdiction scoping
+
+Date: 2026-10-06
+
+Prompt:
+
+```text
+Step 6 - Security: enforce the write-read split. Two kinds of client, two authentication schemes.
+
+1. SLSEA users (read clients). POST /auth/tokens with {"username", "password"} verifies the bcrypt hash and returns 200 with {"access_token", "token_type": "Bearer", "expires_in"}. The JWT (jsonwebtoken, HS256, secret from JWT_SECRET, 1 hour expiry) carries sub, role, province_id and district_id, so scope checks need no database lookup per request. Wrong credentials return 401 with the same message for an unknown user and a wrong password.
+
+2. authenticateUser middleware: a missing, malformed or expired token returns 401 with a WWW-Authenticate: Bearer header. Apply it to every GET endpoint except /health.
+
+3. Jurisdiction-scoped authorization, implemented in one module and reused everywhere:
+   - admin and national: all data.
+   - provincial: only their province_id. district: only their district_id.
+   - An atomic or scoped resource outside the caller's jurisdiction returns 403 (it exists but is not theirs). A resource that does not exist returns 404.
+   - Collections (/provinces, /installations, /readings and so on) are narrowed to the caller's jurisdiction automatically. An explicit filter outside it returns 403.
+   - A district user can read their own district and its parent province record, but not sibling districts or anything beneath them.
+
+4. Metering devices (write clients). authenticateDevice middleware reads the X-Device-Key header, hashes it with SHA-256, and compares it in constant time (crypto.timingSafeEqual) with the device_key_hash of the installation named in the URL. It sets req.device = {installation_id}. A missing key returns 401. A valid key for a different installation returns 403. A device key must not work on any read endpoint, and a user JWT must not work on the device write path. Do not add the ingestion endpoint yet - only the middleware and its unit tests.
+
+5. Add helmet and cors. Add JWT_SECRET and JWT_EXPIRES_IN to .env.example, and fail fast at startup if JWT_SECRET is missing outside the test environment.
+
+6. Update existing tests to authenticate, and add: login success and failure; 401 without a token; a district user reading their own district (200) and another district (403); a provincial user's /installations list contains only their province; a national user sees all 200 installations; an expired token returns 401.
+
+Then do the step wrap-up as Step 6 - Authentication and jurisdiction scoping.
+```
+
+Summary of what was generated:
+
+- `POST /auth/tokens` (bcrypt check, HS256 JWT with role and jurisdiction) and `authenticateUser` on every GET except `/health`; `authenticateDevice` (SHA-256 + `timingSafeEqual`, 401/403) with unit tests; helmet, cors and a fail-fast `JWT_SECRET` check.
+- One jurisdiction module used by every service: 403 outside the jurisdiction, 404 when missing, collections narrowed automatically, explicit filters outside it refused.
+- Services now throw `AppError` for not-found and forbidden; existing tests authenticate, and new auth, jurisdiction and device tests bring the total to 141.
