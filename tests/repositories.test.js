@@ -1,6 +1,7 @@
 // The memory repositories: async interface, lookups and the readings index.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+require('./helpers/test-env');
 const repositories = require('../src/repositories');
 
 test('repository methods return Promises', () => {
