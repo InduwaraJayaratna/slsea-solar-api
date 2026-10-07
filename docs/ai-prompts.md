@@ -260,3 +260,34 @@ Summary of what was generated:
 - Device ingestion (`POST /installations/{id}/readings`): 201 with Location, id from installation and timestamp so retries get 409, plus future-timestamp, decreasing-energy and not-active checks; readings append-only (405 on PUT/PATCH/DELETE).
 - Admin installation management: create on a substation (server-generated id and one-time device key), PUT, PATCH and DELETE, with If-Match giving 412 on stale ETags and 409 for duplicates or for deleting an installation with readings; reference data stays 405.
 - One shared `validateBody` helper with per-field details, repository write methods (create, update, remove, appendReading), and 168 tests in total.
+
+## Step 8 - District generation summary
+
+Date: 2026-10-07
+
+Prompt:
+
+```text
+Step 8 - District generation summary (processing resource).
+
+Add GET /districts/{district_id}/generation-summary, jurisdiction-scoped like every other district resource. It is computed on request across all installations in the district; nothing is stored. Response:
+- district (id, name, province_id), generated_at, and date: the Sri Lanka local day being summarised (optional query parameter date=YYYY-MM-DD, default today)
+- installation_count, reporting_count (installations whose last reading is under 30 minutes old) and offline_count
+- current_power_kw: the sum of the last-known power of reporting installations
+- energy_today_kwh: for each installation, its last cumulative energy_kwh of the day minus its last value before the day started, summed
+- installed_capacity_kw and utilisation_pct (current power / installed capacity)
+- peak_power_kw and peak_at for the day
+- by_substation: current_power_kw and energy_today_kwh per substation
+
+Put the calculation in a service. The repository does the data access through one aggregate-style method (for example readings.summariseByInstallations(installation_ids, day_start, day_end)), so it can become a single MongoDB aggregation pipeline later. Support conditional GET. An invalid date returns 400; a district outside the caller's scope returns 403.
+
+Tests: the totals equal a brute-force calculation over the seed for one district and day; energy_today_kwh is never negative; a district user gets 403 for another district.
+
+Then do the step wrap-up as Step 8 - District generation summary.
+```
+
+Summary of what was generated:
+
+- `GET /districts/{district_id}/generation-summary`: counts, current power, energy for the day, capacity, utilisation, peak and per-substation figures, computed on request, jurisdiction-scoped, with an optional `date` and a weak ETag for conditional GET.
+- One aggregate repository method, `readings.summariseByInstallations`, shaped like a MongoDB pipeline; the day-energy formula and staleness rule are now shared with the overview and last-reading.
+- 178 tests in total, including a brute-force check against the seed files, non-negative energy for every district and day, and 403 outside scope.
