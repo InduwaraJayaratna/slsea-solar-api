@@ -15,4 +15,7 @@ function sriLankaDay(ms) {
   };
 }
 
-module.exports = { sriLankaDay };
+// The Sri Lanka day for a calendar date such as "2026-10-05".
+const sriLankaDayOf = (date) => sriLankaDay(Date.parse(`${date}T00:00:00+05:30`));
+
+module.exports = { sriLankaDay, sriLankaDayOf };

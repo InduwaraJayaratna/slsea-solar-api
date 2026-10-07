@@ -101,6 +101,7 @@ access token (see [Authentication](#authentication)); writes are covered in
 | GET    | `/provinces/{province_id}/districts`                     | the province's districts (collection)                                                   |
 | GET    | `/districts/{district_id}`                               | one district                                                                            |
 | GET    | `/districts/{district_id}/substations`                   | the district's substations (collection)                                                 |
+| GET    | `/districts/{district_id}/generation-summary`            | the district's generation today (or on `?date=`), computed on request                   |
 | GET    | `/substations/{substation_id}`                           | one substation                                                                          |
 | GET    | `/substations/{substation_id}/installations`             | the substation's installations (collection)                                             |
 | GET    | `/installations`                                         | installations across the estate (collection, filterable)                                |
@@ -148,6 +149,53 @@ is hashed with SHA-256 and compared, in constant time, with the stored hash of t
 installation in the URL. A missing or unknown key gets 401; a valid key for a
 different installation gets 403. Device keys do not work on read endpoints, and user
 tokens do not work on device endpoints.
+
+### District generation summary
+
+`GET /districts/{district_id}/generation-summary` is a processing resource: it is
+computed on request from every installation in the district, and nothing is stored.
+It follows the same jurisdiction rules as the district itself (403 outside your
+scope).
+
+```json
+{
+  "district": { "id": "COL", "name": "Colombo", "province_id": "WP" },
+  "date": "2026-10-05",
+  "generated_at": "2026-10-06T00:10:00Z",
+  "installation_count": 21,
+  "reporting_count": 19,
+  "offline_count": 2,
+  "current_power_kw": 0,
+  "energy_today_kwh": 1172.483,
+  "installed_capacity_kw": 236,
+  "utilisation_pct": 0,
+  "peak_power_kw": 150.376,
+  "peak_at": "2026-10-05T06:00:00Z",
+  "by_substation": [
+    {
+      "substation_id": "SUB-001",
+      "name": "Kolonnawa Grid Substation",
+      "installation_count": 7,
+      "current_power_kw": 0,
+      "energy_today_kwh": 288.046
+    }
+  ]
+}
+```
+
+- `date` (`?date=YYYY-MM-DD`, default today) is a Sri Lanka calendar day. It decides
+  `energy_today_kwh` and the peak. An invalid or future date returns 400.
+- `reporting_count`, `current_power_kw` and `utilisation_pct` always describe _now_.
+  An installation is reporting if its latest reading is at most 30 minutes old (the
+  same rule as `last-reading`'s `stale`). Only reporting installations count towards
+  current power.
+- `energy_today_kwh`: for each installation, its last meter total in the day minus
+  its last total before the day started, summed (the same formula as the overview's
+  `today`).
+- `utilisation_pct` is current power as a percentage of `installed_capacity_kw` (the
+  capacity of every installation in the district).
+- `peak_power_kw` / `peak_at`: the moment in the day when the district's summed power
+  was highest.
 
 ### Writes
 
@@ -342,6 +390,9 @@ Every GET response has:
     local midnight (when `today` restarts);
   - provinces, districts and substations have no timestamp, so they rely on the
     ETag alone.
+  - the generation summary has a weak ETag built from everything except
+    `generated_at`, and no `Last-Modified`: its figures change with the clock, not
+    only when data arrives.
 - `Cache-Control: private, no-cache`: clients may keep a copy but must revalidate
   it each time.
 
@@ -429,6 +480,7 @@ is git-ignored.
 | 5    | Operational and analytical reads        | Done   |
 | 6    | Authentication and jurisdiction scoping | Done   |
 | 7    | Write path and CRUD semantics           | Done   |
+| 8    | District generation summary             | Done   |
 
 ## AI disclosure
 

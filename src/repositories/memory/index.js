@@ -151,6 +151,51 @@ module.exports = {
       return copy(record);
     },
 
+    // Everything a generation summary needs about a set of installations for
+    // one day [dayStart, dayEnd), in a single call:
+    //   installations: per installation, its latest reading overall, its last
+    //                  reading before the day, and its first and last in the day
+    //   peak:          the moment in the day when their summed power was highest
+    // In MongoDB this is one aggregation pipeline: $match the installations,
+    // then $facet into a per-installation $group (with $first/$last) and a
+    // per-timestamp $group summing power_kw, sorted, $limit 1.
+    async summariseByInstallations(installationIds, dayStart, dayEnd) {
+      const startMs = Date.parse(dayStart);
+      const endMs = Date.parse(dayEnd);
+      const powerByTimestamp = new Map();
+
+      const installations = installationIds.map((installationId) => {
+        const readings = readingsByInstallation.get(installationId) ?? [];
+        const startIndex = firstIndexAtOrAfter(readings, startMs);
+        const endIndex = firstIndexAtOrAfter(readings, endMs);
+        for (let i = startIndex; i < endIndex; i++) {
+          const { timestamp, power_kw: powerKw } = readings[i];
+          powerByTimestamp.set(timestamp, (powerByTimestamp.get(timestamp) ?? 0) + powerKw);
+        }
+        const copyOrNull = (index) => (readings[index] ? copy(readings[index]) : null);
+        return {
+          installation_id: installationId,
+          latest: copyOrNull(readings.length - 1),
+          last_before_day: startIndex > 0 ? copyOrNull(startIndex - 1) : null,
+          first_in_day: endIndex > startIndex ? copyOrNull(startIndex) : null,
+          last_in_day: endIndex > startIndex ? copyOrNull(endIndex - 1) : null,
+        };
+      });
+
+      // Highest summed power; on a tie, the earliest moment.
+      let peak = null;
+      for (const [timestamp, powerKw] of powerByTimestamp) {
+        if (
+          !peak ||
+          powerKw > peak.power_kw ||
+          (powerKw === peak.power_kw && timestamp < peak.timestamp)
+        ) {
+          peak = { timestamp, power_kw: powerKw };
+        }
+      }
+      return { installations, peak };
+    },
+
     // One page of readings, plus how many match in total.
     //   filter.installation_ids  only these installations (omit for all)
     //   filter.from / filter.to  ISO timestamps; from inclusive, to exclusive
