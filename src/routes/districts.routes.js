@@ -15,4 +15,10 @@ router
   .get(authenticateUser, substations.listSubstationsInDistrict)
   .all(readOnly);
 
+// A processing resource: computed from the district's readings on request.
+router
+  .route('/:district_id/generation-summary')
+  .get(authenticateUser, districts.getGenerationSummary)
+  .all(readOnly);
+
 module.exports = router;
