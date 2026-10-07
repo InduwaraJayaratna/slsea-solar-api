@@ -12,6 +12,13 @@ const { DuplicateKeyError } = require('../repositories/errors');
 // 15 minutes, so 30 minutes means at least one report is missing.
 const STALE_AFTER_SECONDS = 30 * 60;
 
+// How old a reading is at `nowMs`, and whether it is stale. One rule, used by
+// last-reading and by the generation summary's reporting count.
+function readingAge(reading, nowMs) {
+  const ageSeconds = Math.max(0, Math.floor((nowMs - Date.parse(reading.timestamp)) / 1000));
+  return { age_seconds: ageSeconds, stale: ageSeconds > STALE_AFTER_SECONDS };
+}
+
 // One page of readings matching `filter`, plus the total and the newest
 // timestamp among all matches (the collection's Last-Modified).
 // `options` holds sort, page and page_size from the parsed query.
@@ -91,36 +98,35 @@ async function getLastReading(user, installationId) {
     throw new AppError(404, 'NO_READINGS', `Installation "${installationId}" has no readings yet`);
   }
 
-  const ageSeconds = Math.max(0, Math.floor((clock.now() - Date.parse(reading.timestamp)) / 1000));
-  return { reading, age_seconds: ageSeconds, stale: ageSeconds > STALE_AFTER_SECONDS };
+  return { reading, ...readingAge(reading, clock.now()) };
 }
 
+// Energy an installation generated in one day, in kWh, from its entry in
+// readings.summariseByInstallations. energy_kwh is the meter's running total,
+// so the day's energy is its last total in the day minus its last total before
+// local midnight. (The reading at 00:00 local covers 23:45-00:00, but solar
+// output then is zero.) With no reading before the day (e.g. new that day), it
+// counts from its first reading in the day instead. Because the meter total
+// never decreases (ingestion refuses that), the result is never negative.
+function dayEnergyKwh({ last_before_day: before, first_in_day: first, last_in_day: last }) {
+  if (!last) return 0;
+  return last.energy_kwh - (before ?? first).energy_kwh;
+}
+
+// Rounded to the meter's precision (3 decimals) to hide floating-point noise.
+const roundKwh = (value) => Number(value.toFixed(3));
+
 // Energy generated so far in the current Sri Lanka day, in kWh.
-// energy_kwh is the meter's running total, so today's energy is the latest
-// total today minus the last total before local midnight. (The reading at
-// 00:00 local covers 23:45-00:00, but solar output then is zero.)
 async function getEnergyToday(installationId) {
   const day = sriLankaDay(clock.now());
-  const startOfDay = new Date(day.startMs).toISOString();
-  const endOfDay = new Date(day.endMs).toISOString();
-
-  const latestToday = await findLatestReading(installationId, { from: startOfDay, to: endOfDay });
-  if (!latestToday) return { date: day.date, startMs: day.startMs, energyKwh: 0 };
-
-  // If the installation has no reading before today (e.g. new today), count
-  // from its first reading today instead.
-  let baseline = await findLatestReading(installationId, { to: startOfDay });
-  if (!baseline) {
-    const { items } = await repositories.readings.findMany(
-      { installation_ids: [installationId], from: startOfDay, to: endOfDay },
-      { sort: 'timestamp', limit: 1 },
-    );
-    baseline = items[0];
-  }
-
-  // Rounded to the meter's precision (3 decimals) to hide floating-point noise.
-  const energyKwh = Number((latestToday.energy_kwh - baseline.energy_kwh).toFixed(3));
-  return { date: day.date, startMs: day.startMs, energyKwh };
+  const {
+    installations: [entry],
+  } = await repositories.readings.summariseByInstallations(
+    [installationId],
+    new Date(day.startMs).toISOString(),
+    new Date(day.endMs).toISOString(),
+  );
+  return { date: day.date, startMs: day.startMs, energyKwh: roundKwh(dayEnergyKwh(entry)) };
 }
 
 // Readings may be timestamped at most this far ahead of the server's clock, to
@@ -207,6 +213,9 @@ async function ingestReading(installationId, fields) {
 }
 
 module.exports = {
+  readingAge,
+  dayEnergyKwh,
+  roundKwh,
   ingestReading,
   listInstallationReadings,
   listReadings,
