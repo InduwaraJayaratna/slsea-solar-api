@@ -1,0 +1,1291 @@
+openapi: 3.0.3
+info:
+  title: SLSEA Solar API
+  version: 0.1.0
+  description: |
+    Real-time and historical generation data from rooftop solar installations,
+    for the Sri Lanka Sustainable Energy Authority (SLSEA).
+
+    **Two kinds of client, two authentication schemes**
+
+    - *SLSEA users* (read clients) sign in at `POST /auth/tokens` and send the
+      access token as `Authorization: Bearer <token>` (**bearerAuth**). Every GET
+      except `/health` needs one. What a user can read depends on their role:
+      `admin` and `national` see everything, `provincial` users their province,
+      `district` users their district (and their province's own record). Outside
+      that, a resource gives **403**; one that does not exist gives **404**.
+    - *Metering devices* (write clients) send readings with their device key in
+      `X-Device-Key` (**deviceKey**). A device key works only on
+      `POST /installations/{installation_id}/readings`, and a user token never does.
+
+    Demo logins (all with password `SolarDemo#2026`): `admin`, `national1`,
+    `prov.wp` (Western Province) and `dist.col` (Colombo district). In Swagger UI,
+    call **POST /auth/tokens**, copy `access_token`, then click **Authorize**.
+
+    **Conventions**
+
+    - JSON only. Field names and query parameters are `snake_case`; timestamps are
+      ISO 8601 UTC (`2026-10-05T06:15:00Z`).
+    - Every error has the same body: see the `Error` schema.
+    - Collections are paginated (`page`, `page_size`) and wrapped in
+      `{ data, pagination, links }`; single resources are bare objects.
+    - Every GET sends an `ETag` (and `Last-Modified` where the data has a time).
+      Send them back in `If-None-Match` / `If-Modified-Since` to get **304**.
+    - Writes to installations accept `If-Match`; a stale ETag gives **412**.
+    - A method a path does not support gives **405** with an `Allow` header
+      listing the ones it does (for example, readings are append-only, and
+      provinces, districts and substations are read-only).
+    - Every response has an `X-Request-Id` header, also written to the server log.
+servers:
+  - url: /api/v1
+    description: This server
+tags:
+  - name: System
+    description: Health of the service.
+  - name: Auth
+    description: Signing in SLSEA users.
+  - name: Provinces
+    description: The 9 provinces (read-only reference data).
+  - name: Districts
+    description: The 25 districts (read-only reference data).
+  - name: Substations
+    description: Grid substations (read-only reference data), and creating installations on them.
+  - name: Installations
+    description: Rooftop solar installations. Writes are for admins only.
+  - name: Readings
+    description: Generation readings, every 15 minutes, append-only.
+  - name: Summaries
+    description: Figures computed on request from many readings.
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Service health
+      description: Whether the API is up, which data source it uses, and how many records each collection holds. Needs no token.
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /auth/tokens:
+    post:
+      tags: [Auth]
+      summary: Sign in and get an access token
+      description: |
+        Checks the username and password and returns a JWT access token (HS256,
+        1 hour) carrying the user's id, role, province_id and district_id. A wrong
+        username and a wrong password get the same 401, so the response does not
+        reveal which usernames exist. The response is never cached
+        (`Cache-Control: no-store`).
+      operationId: createToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            examples:
+              district:
+                summary: District user (Colombo)
+                value: { username: dist.col, password: 'SolarDemo#2026' }
+              admin:
+                summary: Admin
+                value: { username: admin, password: 'SolarDemo#2026' }
+      responses:
+        '200':
+          description: Signed in.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+
+  /provinces:
+    get:
+      tags: [Provinces]
+      summary: List provinces
+      description: All provinces, narrowed to the caller's jurisdiction (a provincial or district user sees only their own province).
+      operationId: listProvinces
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One page of provinces.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Link: { $ref: '#/components/headers/Link' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProvinceList' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /provinces/{province_id}:
+    get:
+      tags: [Provinces]
+      summary: Get a province
+      operationId: getProvince
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProvinceId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The province.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Province' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /provinces/{province_id}/districts:
+    get:
+      tags: [Districts]
+      summary: List the districts of a province
+      description: 404 if the province does not exist; 200 with an empty list if it has none. A district user sees only their own district.
+      operationId: listDistrictsInProvince
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProvinceId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One page of districts.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Link: { $ref: '#/components/headers/Link' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DistrictList' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /districts/{district_id}:
+    get:
+      tags: [Districts]
+      summary: Get a district
+      operationId: getDistrict
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/DistrictId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The district.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/District' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /districts/{district_id}/substations:
+    get:
+      tags: [Substations]
+      summary: List the substations of a district
+      operationId: listSubstationsInDistrict
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/DistrictId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One page of substations.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Link: { $ref: '#/components/headers/Link' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubstationList' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /districts/{district_id}/generation-summary:
+    get:
+      tags: [Summaries]
+      summary: District generation summary
+      description: |
+        Computed on request across every installation in the district; nothing is
+        stored. `date` (a Sri Lanka calendar day, default today) decides
+        `energy_today_kwh` and the peak. `reporting_count`, `current_power_kw` and
+        `utilisation_pct` always describe now: an installation is reporting if its
+        latest reading is at most 30 minutes old. Sent with a weak ETag (it ignores
+        `generated_at`) and no Last-Modified, because the figures change with the clock.
+      operationId: getGenerationSummary
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/DistrictId'
+        - name: date
+          in: query
+          description: The Sri Lanka calendar day to summarise. Must not be in the future.
+          schema: { type: string, format: date, example: '2026-10-05' }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The summary.
+          headers:
+            ETag: { $ref: '#/components/headers/WeakETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenerationSummary' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /substations/{substation_id}:
+    get:
+      tags: [Substations]
+      summary: Get a substation
+      operationId: getSubstation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SubstationId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The substation.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Substation' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /substations/{substation_id}/installations:
+    get:
+      tags: [Installations]
+      summary: List the installations on a substation
+      operationId: listInstallationsOnSubstation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SubstationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One page of installations.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Link: { $ref: '#/components/headers/Link' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstallationList' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+    post:
+      tags: [Installations]
+      summary: Create an installation (admin)
+      description: |
+        Admin only; other roles get 403. The server sets the id, the hierarchy
+        fields (from the substation) and a new device key. **The plaintext
+        `device_key` is in this response only**: it is stored only as a SHA-256
+        hash and can never be fetched again, so the response is never cached.
+        A `meter_id` or `inverter_id` already in use gives 409.
+      operationId: createInstallation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SubstationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InstallationInput' }
+      responses:
+        '201':
+          description: Created. The body is the new installation plus its one-time device key.
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstallationCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+
+  /installations:
+    get:
+      tags: [Installations]
+      summary: List installations across the estate
+      description: |
+        Filters combine. The list is narrowed to the caller's jurisdiction; an
+        explicit filter outside it gives 403. A well-formed id that matches
+        nothing gives an empty page.
+      operationId: listInstallations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProvinceFilter'
+        - $ref: '#/components/parameters/DistrictFilter'
+        - $ref: '#/components/parameters/SubstationFilter'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/InstallationStatus' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One page of installations.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Link: { $ref: '#/components/headers/Link' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstallationList' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /installations/{installation_id}:
+    get:
+      tags: [Installations]
+      summary: Get an installation
+      operationId: getInstallation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The installation.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Installation' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+    put:
+      tags: [Installations]
+      summary: Replace an installation (admin)
+      description: |
+        Replaces every editable field; all are required. Idempotent: sending the
+        same body again changes nothing (not even `updated_at`). Send `If-Match`
+        with the ETag you last read to avoid overwriting someone else's change.
+      operationId: replaceInstallation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InstallationInput' }
+      responses:
+        '200':
+          description: The updated installation, with its new ETag.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Installation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+    patch:
+      tags: [Installations]
+      summary: Update some fields of an installation (admin)
+      description: Changes only the fields sent (at least one). Read-only fields (id, substation_id, district_id, province_id, created_at, updated_at) and unknown fields give 400.
+      operationId: patchInstallation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InstallationPatch' }
+            example: { status: inactive }
+      responses:
+        '200':
+          description: The updated installation, with its new ETag.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Installation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+    delete:
+      tags: [Installations]
+      summary: Delete an installation (admin)
+      description: |
+        Only an installation that has never reported can be deleted; one with
+        readings gives 409 `INSTALLATION_HAS_READINGS` (set its status to
+        `inactive` instead, so its history is kept). Deleting again gives 404.
+      operationId: deleteInstallation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Deleted. No body.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /installations/{installation_id}/overview:
+    get:
+      tags: [Installations]
+      summary: Installation overview
+      description: The installation with its substation, district and province, its latest reading, and the energy generated so far today (Sri Lanka day). One response for an operations screen.
+      operationId: getOverview
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The overview.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Overview' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /installations/{installation_id}/last-reading:
+    get:
+      tags: [Readings]
+      summary: The latest reading of an installation
+      description: |
+        A derived resource: the newest reading, with `age_seconds` and `stale`
+        (true when older than 30 minutes). 404 `NOT_FOUND` for an unknown
+        installation, 404 `NO_READINGS` for one that has not reported yet. Sent
+        with a weak ETag built from the reading id and `stale`, since
+        `age_seconds` changes every second.
+      operationId: getLastReading
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The latest reading.
+          headers:
+            ETag: { $ref: '#/components/headers/WeakETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LastReading' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /installations/{installation_id}/readings:
+    get:
+      tags: [Readings]
+      summary: Reading history of an installation
+      operationId: listInstallationReadings
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One page of readings. Last-Modified is the newest matching reading's timestamp.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Link: { $ref: '#/components/headers/Link' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReadingList' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+    post:
+      tags: [Readings]
+      summary: Send a reading (metering device)
+      description: |
+        Device key only (`X-Device-Key`); a user token gives 401. The key must be
+        this installation's: another installation's valid key gives 403.
+
+        The reading id is the installation id plus the timestamp, so sending the
+        same reading again gives 409 `DUPLICATE_READING` instead of a duplicate.
+        Also 409: `ENERGY_DECREASED` (the meter total would go backwards) and
+        `INSTALLATION_NOT_ACTIVE`. A timestamp more than 5 minutes in the future
+        gives 400. Readings are append-only: PUT, PATCH and DELETE give 405.
+      operationId: ingestReading
+      security: [{ deviceKey: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReadingInput' }
+      responses:
+        '201':
+          description: Stored.
+          headers:
+            Location: { $ref: '#/components/headers/Location' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reading' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/DeviceUnauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+
+  /installations/{installation_id}/readings/{reading_id}:
+    get:
+      tags: [Readings]
+      summary: Get one reading
+      description: 404 if there is no such reading, or it belongs to another installation.
+      operationId: getInstallationReading
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+        - name: reading_id
+          in: path
+          required: true
+          description: The installation id plus the compact UTC time.
+          schema: { type: string, example: INST-0001-20261005T0615Z }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The reading. Readings never change, so Last-Modified is its timestamp.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reading' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+  /readings:
+    get:
+      tags: [Readings]
+      summary: Readings across the estate
+      description: |
+        The jurisdiction filters (and the caller's own jurisdiction) are resolved
+        to a set of installations first, then their readings are returned. An
+        explicit filter outside the caller's jurisdiction gives 403.
+      operationId: listReadings
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProvinceFilter'
+        - $ref: '#/components/parameters/DistrictFilter'
+        - $ref: '#/components/parameters/SubstationFilter'
+        - name: installation_id
+          in: query
+          schema: { type: string, pattern: '^INST-[0-9]+$', example: INST-0001 }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One page of readings.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Link: { $ref: '#/components/headers/Link' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReadingList' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: SLSEA users (read clients). Get a token from POST /auth/tokens.
+    deviceKey:
+      type: apiKey
+      in: header
+      name: X-Device-Key
+      description: Metering devices (write clients). The key issued when the installation was created.
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Page number, from 1.
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      description: Items per page.
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Sort:
+      name: sort
+      in: query
+      description: '`-timestamp` for newest first, `timestamp` for oldest first.'
+      schema: { type: string, enum: ['-timestamp', timestamp], default: '-timestamp' }
+    From:
+      name: from
+      in: query
+      description: Start of the time window, inclusive. A date (00:00 UTC) or a date-time with a time zone; write `+` as `%2B`. Must be before `to`.
+      schema: { type: string, example: '2026-10-01T00:00:00Z' }
+    To:
+      name: to
+      in: query
+      description: End of the time window, exclusive. Same format as `from`.
+      schema: { type: string, example: '2026-10-02T00:00:00Z' }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: An ETag from an earlier response. If the resource has not changed, the response is 304 with no body.
+      schema: { type: string }
+    IfMatch:
+      name: If-Match
+      in: header
+      description: The ETag you last read. If the installation has changed since, the write is refused with 412. Weak ETags never match.
+      schema: { type: string }
+    ProvinceId:
+      name: province_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[A-Z]{2}$', example: WP }
+    DistrictId:
+      name: district_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[A-Z]{3}$', example: COL }
+    SubstationId:
+      name: substation_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^SUB-[0-9]+$', example: SUB-001 }
+    InstallationId:
+      name: installation_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^INST-[0-9]+$', example: INST-0001 }
+    ProvinceFilter:
+      name: province_id
+      in: query
+      schema: { type: string, pattern: '^[A-Z]{2}$', example: WP }
+    DistrictFilter:
+      name: district_id
+      in: query
+      schema: { type: string, pattern: '^[A-Z]{3}$', example: COL }
+    SubstationFilter:
+      name: substation_id
+      in: query
+      schema: { type: string, pattern: '^SUB-[0-9]+$', example: SUB-001 }
+
+  headers:
+    ETag:
+      description: A strong validator (SHA-256 of the body). Send it back in If-None-Match, or in If-Match for writes.
+      schema: { type: string, example: '"03BwnzVSQ2PJvAsYgFbJkm2rk09Rp2hRCSbrqeDtZBQ"' }
+    WeakETag:
+      description: A weak validator (W/"..."), for a body that also changes with the clock.
+      schema: { type: string, example: 'W/"X8OgMYztMpAJFHzrDd794RNZEfEwQOIiU82pUGUu4fU"' }
+    LastModified:
+      description: When the data last changed (updated_at, or the newest reading's timestamp).
+      schema: { type: string, example: 'Sun, 07 Dec 2025 15:34:00 GMT' }
+    CacheControl:
+      description: Clients may keep a copy but must revalidate it before use.
+      schema: { type: string, example: 'private, no-cache' }
+    NoStore:
+      description: The response holds a secret, so it must not be cached.
+      schema: { type: string, example: no-store }
+    Link:
+      description: RFC 8288 links to the next and previous pages, when they exist.
+      schema:
+        type: string
+        example: '</api/v1/installations?page=3&page_size=50>; rel="next", </api/v1/installations?page=1&page_size=50>; rel="prev"'
+    Location:
+      description: The URL of the created resource.
+      schema: { type: string, example: /api/v1/installations/INST-0201 }
+    Allow:
+      description: The methods this path supports.
+      schema: { type: string, example: 'GET, HEAD' }
+    WWWAuthenticate:
+      description: How to authenticate (RFC 9110).
+      schema: { type: string, example: 'Bearer realm="slsea-solar-api", error="invalid_token"' }
+
+  responses:
+    NotModified:
+      description: Not Modified. Your copy (the ETag in If-None-Match) is current. No body.
+      headers:
+        ETag: { $ref: '#/components/headers/ETag' }
+    BadRequest:
+      description: Bad Request. An invalid query parameter or body field; `details` names each one.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: BAD_REQUEST
+              message: Invalid request body
+              details:
+                - { field: power_kw, message: must be at least 0 }
+                - { field: voltage_v, message: is required }
+    Unauthorized:
+      description: Unauthorized. Missing, malformed or expired token, or a wrong username or password.
+      headers:
+        WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: UNAUTHORIZED, message: Access token has expired, details: [] } }
+    DeviceUnauthorized:
+      description: Unauthorized. Missing or unknown device key (a user token is not accepted here).
+      headers:
+        WWW-Authenticate:
+          description: How to authenticate.
+          schema:
+            { type: string, example: 'DeviceKey realm="slsea-solar-api", header="X-Device-Key"' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            {
+              error:
+                { code: UNAUTHORIZED, message: Send the device key in X-Device-Key, details: [] },
+            }
+    Forbidden:
+      description: Forbidden. The resource exists but is outside your jurisdiction, the action needs the admin role, or the device key is for another installation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            {
+              error:
+                {
+                  code: FORBIDDEN,
+                  message: District "GAM" is outside your jurisdiction,
+                  details: [],
+                },
+            }
+    NotFound:
+      description: Not Found. The resource (or its parent) does not exist. `NO_READINGS` for last-reading of an installation that has not reported.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            { error: { code: NOT_FOUND, message: Installation "INST-9999" not found, details: [] } }
+    MethodNotAllowed:
+      description: Method Not Allowed. The path exists but not for this method.
+      headers:
+        Allow: { $ref: '#/components/headers/Allow' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            {
+              error:
+                {
+                  code: METHOD_NOT_ALLOWED,
+                  message: DELETE is not allowed on this resource,
+                  details: [],
+                },
+            }
+    NotAcceptable:
+      description: Not Acceptable. The Accept header rules out application/json.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            {
+              error:
+                {
+                  code: NOT_ACCEPTABLE,
+                  message: This API only produces application/json,
+                  details: [],
+                },
+            }
+    Conflict:
+      description: |
+        Conflict with the current state. Codes: `CONFLICT` (meter_id or
+        inverter_id in use), `DUPLICATE_READING`, `ENERGY_DECREASED`,
+        `INSTALLATION_NOT_ACTIVE`, `INSTALLATION_HAS_READINGS`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: DUPLICATE_READING
+              message: A reading for 2026-10-06T00:15:00Z already exists (INST-0201-20261006T0015Z)
+              details: []
+    PreconditionFailed:
+      description: Precondition Failed. If-Match does not match the current ETag; fetch the resource again.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: PRECONDITION_FAILED
+              message: 'The resource has changed since you read it: fetch it again and retry with the new ETag'
+              details: []
+    PayloadTooLarge:
+      description: Payload Too Large. The body is over the size limit (100 kB by default).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnsupportedMediaType:
+      description: Unsupported Media Type. A request body that is not application/json.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            {
+              error:
+                {
+                  code: UNSUPPORTED_MEDIA_TYPE,
+                  message: Request body must be application/json,
+                  details: [],
+                },
+            }
+
+  schemas:
+    Error:
+      type: object
+      description: The one error format used by every endpoint.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { type: string, description: Stable machine-readable code., example: NOT_FOUND }
+            message:
+              {
+                type: string,
+                description: Human-readable explanation.,
+                example: Installation "INST-9999" not found,
+              }
+            details:
+              type: array
+              description: One entry per problem (a body field or query parameter); otherwise empty.
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  parameter: { type: string }
+                  message: { type: string }
+
+    Pagination:
+      type: object
+      required: [total, page, page_size, total_pages]
+      properties:
+        total: { type: integer, example: 200 }
+        page: { type: integer, example: 2 }
+        page_size: { type: integer, example: 50 }
+        total_pages: { type: integer, example: 4 }
+    Links:
+      type: object
+      description: Relative links that keep the request's other query parameters. next and prev are null when there is no such page.
+      required: [self, first, last, next, prev]
+      properties:
+        self: { type: string, example: /api/v1/installations?page=2&page_size=50 }
+        first: { type: string, example: /api/v1/installations?page=1&page_size=50 }
+        last: { type: string, example: /api/v1/installations?page=4&page_size=50 }
+        next: { type: string, nullable: true, example: /api/v1/installations?page=3&page_size=50 }
+        prev: { type: string, nullable: true, example: /api/v1/installations?page=1&page_size=50 }
+    Page:
+      type: object
+      description: The envelope every collection is wrapped in; `data` holds the items.
+      required: [data, pagination, links]
+      properties:
+        data: { type: array, items: {} }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+        links: { $ref: '#/components/schemas/Links' }
+
+    Health:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+        version: { type: string, example: 0.1.0 }
+        data_source: { type: string, enum: [memory, mongo], example: mongo }
+        record_counts:
+          type: object
+          additionalProperties: { type: integer }
+          example:
+            {
+              provinces: 9,
+              districts: 25,
+              substations: 30,
+              installations: 200,
+              readings: 131027,
+              users: 37,
+            }
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      additionalProperties: false
+      properties:
+        username: { type: string, example: dist.col }
+        password: { type: string, format: password, example: 'SolarDemo#2026' }
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          {
+            type: string,
+            example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiZGlzdHJpY3QifQ.signature,
+          }
+        token_type: { type: string, example: Bearer }
+        expires_in: { type: integer, description: Seconds until the token expires., example: 3600 }
+
+    Reference:
+      type: object
+      description: A short reference to a parent resource.
+      properties:
+        id: { type: string }
+        name: { type: string }
+
+    Province:
+      type: object
+      properties:
+        id: { type: string, example: WP }
+        name: { type: string, example: Western }
+    ProvinceList:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/Province' } }
+
+    District:
+      type: object
+      properties:
+        id: { type: string, example: COL }
+        name: { type: string, example: Colombo }
+        province_id: { type: string, example: WP }
+    DistrictList:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/District' } }
+
+    Substation:
+      type: object
+      properties:
+        id: { type: string, example: SUB-001 }
+        name: { type: string, example: Kolonnawa Grid Substation }
+        district_id: { type: string, example: COL }
+        voltage_kv: { type: number, example: 132 }
+        capacity_mva: { type: number, example: 31.5 }
+        latitude: { type: number, example: 6.87335 }
+        longitude: { type: number, example: 79.90486 }
+    SubstationList:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/Substation' } }
+
+    InstallationStatus:
+      type: string
+      enum: [active, inactive, maintenance]
+    Installation:
+      type: object
+      properties:
+        id: { type: string, example: INST-0001 }
+        substation_id: { type: string, example: SUB-001 }
+        district_id: { type: string, example: COL }
+        province_id: { type: string, example: WP }
+        meter_id: { type: string, example: MTR-21733113 }
+        inverter_id: { type: string, example: INV-228149784 }
+        site_name: { type: string, example: Senanayake Residence }
+        address: { type: string, example: 'No. 101, Lake Road, Kolonnawa' }
+        capacity_kw: { type: number, example: 10 }
+        panel_count: { type: integer, example: 25 }
+        status: { $ref: '#/components/schemas/InstallationStatus' }
+        commissioned_at: { type: string, format: date-time, example: '2025-09-09T20:00:00Z' }
+        latitude: { type: number, example: 6.8778 }
+        longitude: { type: number, example: 79.91575 }
+        created_at: { type: string, format: date-time, example: '2025-09-18T20:00:00Z' }
+        updated_at: { type: string, format: date-time, example: '2025-12-07T15:34:00Z' }
+    InstallationCreated:
+      allOf:
+        - $ref: '#/components/schemas/Installation'
+        - type: object
+          properties:
+            device_key:
+              type: string
+              description: The device's key, in plaintext. Shown only in this response.
+              example: dk_6c1f0e5a9b7d4c3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e
+    InstallationList:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/Installation' } }
+    InstallationInput:
+      type: object
+      description: Every editable field. Required for create and PUT.
+      additionalProperties: false
+      required:
+        [
+          meter_id,
+          inverter_id,
+          site_name,
+          address,
+          capacity_kw,
+          panel_count,
+          status,
+          commissioned_at,
+          latitude,
+          longitude,
+        ]
+      properties:
+        meter_id: { type: string, maxLength: 200, example: MTR-90000001 }
+        inverter_id: { type: string, maxLength: 200, example: INV-900000001 }
+        site_name: { type: string, maxLength: 200, example: Perera Hardware }
+        address: { type: string, maxLength: 200, example: 'No. 12, Station Road, Kolonnawa' }
+        capacity_kw:
+          { type: number, exclusiveMinimum: true, minimum: 0, maximum: 100, example: 7.5 }
+        panel_count: { type: integer, minimum: 1, example: 17 }
+        status: { $ref: '#/components/schemas/InstallationStatus' }
+        commissioned_at:
+          {
+            type: string,
+            format: date-time,
+            description: UTC (ends in Z).,
+            example: '2026-01-15T04:30:00Z',
+          }
+        latitude: { type: number, minimum: 5.8, maximum: 10, example: 6.9 }
+        longitude: { type: number, minimum: 79.5, maximum: 82, example: 79.9 }
+    InstallationPatch:
+      type: object
+      description: Any editable fields; at least one.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        meter_id: { type: string, maxLength: 200 }
+        inverter_id: { type: string, maxLength: 200 }
+        site_name: { type: string, maxLength: 200 }
+        address: { type: string, maxLength: 200 }
+        capacity_kw: { type: number, exclusiveMinimum: true, minimum: 0, maximum: 100 }
+        panel_count: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/InstallationStatus' }
+        commissioned_at: { type: string, format: date-time }
+        latitude: { type: number, minimum: 5.8, maximum: 10 }
+        longitude: { type: number, minimum: 79.5, maximum: 82 }
+
+    Reading:
+      type: object
+      properties:
+        id: { type: string, example: INST-0001-20261005T0615Z }
+        installation_id: { type: string, example: INST-0001 }
+        timestamp: { type: string, format: date-time, example: '2026-10-05T06:15:00Z' }
+        power_kw: { type: number, example: 6.839 }
+        energy_kwh:
+          {
+            type: number,
+            description: The meter's running total; never decreases.,
+            example: 15309.634,
+          }
+        voltage_v: { type: number, example: 231.8 }
+    ReadingList:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/Reading' } }
+    ReadingInput:
+      type: object
+      additionalProperties: false
+      required: [timestamp, power_kw, energy_kwh, voltage_v]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC (ends in Z), on a whole minute, at most 5 minutes in the future.
+          example: '2026-10-06T06:15:00Z'
+        power_kw: { type: number, minimum: 0, example: 3.2 }
+        energy_kwh:
+          {
+            type: number,
+            minimum: 0,
+            description: Must not be lower than the previous reading's.,
+            example: 15340.5,
+          }
+        voltage_v: { type: number, exclusiveMinimum: true, minimum: 0, example: 231 }
+    LastReading:
+      allOf:
+        - $ref: '#/components/schemas/Reading'
+        - type: object
+          properties:
+            age_seconds: { type: integer, example: 600 }
+            stale: { type: boolean, description: True when older than 30 minutes., example: false }
+
+    Overview:
+      type: object
+      properties:
+        installation: { $ref: '#/components/schemas/Installation' }
+        substation: { $ref: '#/components/schemas/Reference' }
+        district: { $ref: '#/components/schemas/Reference' }
+        province: { $ref: '#/components/schemas/Reference' }
+        last_reading:
+          allOf: [{ $ref: '#/components/schemas/Reading' }]
+          nullable: true
+        today:
+          type: object
+          properties:
+            date: { type: string, format: date, example: '2026-10-05' }
+            energy_kwh: { type: number, example: 53.48 }
+
+    GenerationSummary:
+      type: object
+      properties:
+        district: { $ref: '#/components/schemas/District' }
+        date: { type: string, format: date, example: '2026-10-05' }
+        generated_at: { type: string, format: date-time, example: '2026-10-06T00:10:00Z' }
+        installation_count: { type: integer, example: 21 }
+        reporting_count: { type: integer, example: 19 }
+        offline_count: { type: integer, example: 2 }
+        current_power_kw: { type: number, example: 0 }
+        energy_today_kwh: { type: number, example: 1172.483 }
+        installed_capacity_kw: { type: number, example: 236 }
+        utilisation_pct: { type: number, example: 0 }
+        peak_power_kw: { type: number, example: 150.376 }
+        peak_at:
+          { type: string, format: date-time, nullable: true, example: '2026-10-05T06:00:00Z' }
+        by_substation:
+          type: array
+          items:
+            type: object
+            properties:
+              substation_id: { type: string, example: SUB-001 }
+              name: { type: string, example: Kolonnawa Grid Substation }
+              installation_count: { type: integer, example: 7 }
+              current_power_kw: { type: number, example: 0 }
+              energy_today_kwh: { type: number, example: 288.046 }
