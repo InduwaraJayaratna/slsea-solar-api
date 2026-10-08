@@ -24,7 +24,12 @@ if (jwtSecret.length < 32) {
 module.exports = {
   env,
   port: Number(process.env.PORT || 3000),
-  dataSource: process.env.DATA_SOURCE || 'memory',
+  // memory (the seed JSON, in memory) or mongo (MongoDB). With no DATA_SOURCE,
+  // mongo is used whenever a MongoDB URI is configured.
+  dataSource: process.env.DATA_SOURCE || (process.env.MONGODB_URI ? 'mongo' : 'memory'),
+  // Secret: contains the database password. Never log or print it.
+  mongodbUri: process.env.MONGODB_URI || '',
+  mongodbDb: process.env.MONGODB_DB || 'slsea-solar',
   bodyLimit: process.env.BODY_LIMIT || '100kb',
   jwtSecret,
   // Token lifetime, in jsonwebtoken's format: seconds, or a string like "1h".

@@ -17,6 +17,7 @@ rooftop installations report, both as they arrive (real-time) and over time
 - Express 5, with morgan (request logs), dotenv (`.env` loading), helmet (security
   headers) and cors
 - Auth: jsonwebtoken (HS256 access tokens), bcryptjs (password hashes)
+- Data: MongoDB Atlas through Mongoose, or the seed JSON in memory (`DATA_SOURCE`)
 - JSON only; `snake_case` fields and query parameters; ISO 8601 UTC timestamps
 - Layering: routes -> controllers -> services -> repositories
 - Tests: `node:test` + `supertest`
@@ -42,6 +43,8 @@ npm start      # start the API on http://localhost:3000
 npm run dev    # same, restarting on file changes (nodemon)
 npm run lint   # ESLint
 npm test       # node:test + supertest: everything in tests/, including the seed validator
+npm run seed:mongo                       # load data/seed/ into MongoDB (replaces what is there)
+npm run smoke -- http://localhost:3000   # end-to-end checks against a running server
 ```
 
 Then try `curl http://localhost:3000/api/v1/health`.
@@ -55,15 +58,17 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'
 
 Everything else is optional:
 
-| Variable         | Default         | Meaning                                                     |
-| ---------------- | --------------- | ----------------------------------------------------------- |
-| `NODE_ENV`       | `development`   | `test` turns off request logging                            |
-| `PORT`           | `3000`          | port the server listens on                                  |
-| `DATA_SOURCE`    | `memory`        | where repositories read from (`memory` = `data/seed/` JSON) |
-| `BODY_LIMIT`     | `100kb`         | largest JSON request body accepted                          |
-| `JWT_SECRET`     | none (required) | secret for signing access tokens (HS256)                    |
-| `JWT_EXPIRES_IN` | `1h`            | access token lifetime (`3600`, `1h`, `30m`)                 |
-| `CORS_ORIGIN`    | `*`             | origin browsers may call the API from                       |
+| Variable         | Default                                        | Meaning                                                                                 |
+| ---------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `NODE_ENV`       | `development`                                  | `test` turns off request logging                                                        |
+| `PORT`           | `3000`                                         | port the server listens on                                                              |
+| `DATA_SOURCE`    | `mongo` if `MONGODB_URI` is set, else `memory` | where repositories read from: `mongo` (MongoDB) or `memory` (`data/seed/` JSON)         |
+| `MONGODB_URI`    | none                                           | MongoDB connection string. **Secret** (contains the password): never commit or print it |
+| `MONGODB_DB`     | `slsea-solar`                                  | database name inside the cluster                                                        |
+| `BODY_LIMIT`     | `100kb`                                        | largest JSON request body accepted                                                      |
+| `JWT_SECRET`     | none (required)                                | secret for signing access tokens (HS256)                                                |
+| `JWT_EXPIRES_IN` | `1h`                                           | access token lifetime (`3600`, `1h`, `30m`)                                             |
+| `CORS_ORIGIN`    | `*`                                            | origin browsers may call the API from                                                   |
 
 ## Project structure
 
@@ -77,6 +82,8 @@ src/
   services/         business rules, no HTTP
   repositories/     the only code that touches data; index.js picks one by DATA_SOURCE
     memory/         loads data/seed/ once and indexes it
+    mongo/          the same interface over MongoDB (Mongoose queries and aggregations)
+  models/           Mongoose schemas and indexes, one per collection
   middleware/       request id, logging, content negotiation, 404, errors
   serializers/      what clients see of each resource (explicit field lists)
   utils/            AppError, query validation, pagination, conditional GET, clock
@@ -259,8 +266,9 @@ Invalid bodies get 400 with one `details` entry per bad field:
 **Provinces, districts and substations are read-only reference data:** POST, PUT,
 PATCH and DELETE on them return 405.
 
-In memory mode (`DATA_SOURCE=memory`), writes change only the in-memory data. They
-are lost when the server restarts, and the seed files are never modified.
+With `DATA_SOURCE=mongo`, writes are stored in MongoDB and survive restarts. In
+memory mode (`DATA_SOURCE=memory`), writes change only the in-memory data. They are
+lost when the server restarts, and the seed files are never modified.
 
 ### Jurisdiction
 
@@ -437,6 +445,33 @@ specifics (for example, one entry per invalid field) and is otherwise empty.
 | 415    | `UNSUPPORTED_MEDIA_TYPE`    | POST/PUT/PATCH body that is not `application/json`                                                               |
 | 500    | `INTERNAL_ERROR`            | unexpected error; details are logged, never returned                                                             |
 
+## Data sources
+
+The repositories are the only code that touches data, and there are two
+implementations with the same interface. Services, controllers and routes do not
+know which one is in use.
+
+| `DATA_SOURCE` | Data                                              | Used for                                                          |
+| ------------- | ------------------------------------------------- | ----------------------------------------------------------------- |
+| `mongo`       | MongoDB Atlas, via Mongoose                       | running the API for real (the default when `MONGODB_URI` is set)  |
+| `memory`      | `data/seed/*.json`, loaded into memory at startup | the test suite (fast, no network), and running without a database |
+
+**Setting up MongoDB:**
+
+1. Put `MONGODB_URI` and `MONGODB_DB` in `.env` (see `.env.example`). In Atlas, allow
+   your IP under Network Access.
+2. `npm run seed:mongo`: deletes each collection, inserts the seed in batches of
+   5,000, creates the indexes and prints the document counts. It is safe to re-run,
+   and it refuses to run when `NODE_ENV=production` unless given `--force`.
+3. `npm start`: connects to MongoDB before accepting requests.
+4. `npm run smoke -- http://localhost:3000`: health, login, listings, a 304, a 403,
+   one device ingest and the district summary. The ingest stores a real reading for
+   `INST-0001`; re-run `seed:mongo` to remove it. It needs that installation's device
+   key from `data/seed/device-keys.local.json`, or from `SMOKE_DEVICE_KEY`.
+
+Each index in `src/models/` has a comment naming the endpoint it serves. Timestamps
+are stored as BSON dates, and MongoDB's `_id` and `__v` never appear in responses.
+
 ## Data model and seed data
 
 The domain model (entities, keys, relationships, ER diagram and modelling decisions)
@@ -481,6 +516,7 @@ is git-ignored.
 | 6    | Authentication and jurisdiction scoping | Done   |
 | 7    | Write path and CRUD semantics           | Done   |
 | 8    | District generation summary             | Done   |
+| 9    | MongoDB persistence                     | Done   |
 
 ## AI disclosure
 

@@ -45,3 +45,13 @@ test('readings.findMany with no installations matches nothing', async () => {
   const result = await repositories.readings.findMany({ installation_ids: [] });
   assert.deepEqual(result, { items: [], total: 0 });
 });
+
+test('the mongo repositories have exactly the same methods as the memory ones', () => {
+  // Loading them needs no database connection; only calling a method would.
+  const memory = require('../src/repositories/memory');
+  const mongo = require('../src/repositories/mongo');
+  assert.deepEqual(Object.keys(mongo).sort(), Object.keys(memory).sort());
+  for (const name of Object.keys(memory)) {
+    assert.deepEqual(Object.keys(mongo[name]).sort(), Object.keys(memory[name]).sort(), name);
+  }
+});

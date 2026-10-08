@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
 
-# Secrets and local config
+# Secrets and local config (any .env variant, e.g. .env.bak; only the example is shared)
 .env
+.env.*
+!.env.example
 *.local.json
 
 # Build and test output
