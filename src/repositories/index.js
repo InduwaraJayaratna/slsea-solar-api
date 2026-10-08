@@ -7,6 +7,7 @@ const config = require('../config');
 // drivers) are never loaded.
 const implementations = {
   memory: () => require('./memory'),
+  mongo: () => require('./mongo'),
 };
 
 if (!implementations[config.dataSource]) {
