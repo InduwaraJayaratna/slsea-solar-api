@@ -327,3 +327,31 @@ Summary of what was generated:
 - Mongoose connection (cached promise, timeouts), six models plus a counters collection with commented indexes, and MongoDB repositories with the same interface as memory (find/sort/skip/limit with countDocuments, a $facet aggregation for the summary, 11000 mapped to 409).
 - `seed:mongo` (delete, batched insertMany, syncIndexes, counts, production guard) and `smoke` scripts; `DATA_SOURCE` switch with mongo as default when a URI is set; tests stay on memory.
 - Seeded Atlas (131,027 readings), matched 16/16 endpoints between memory and MongoDB, passed all 8 smoke checks, and fixed 304 for fetch() clients that send Cache-Control: no-cache.
+
+## Step 10 - OpenAPI and Swagger UI
+
+Date: 2026-10-08
+
+Prompt:
+
+```text
+Step 10 - OpenAPI 3 documentation served as live Swagger UI.
+
+1. Write docs/openapi.yaml (OpenAPI 3.0.3) by hand from the actual routes: one source of truth, not scattered JSDoc comments. Cover every endpoint under /api/v1 with summary, description, tags (Auth, Provinces, Districts, Substations, Installations, Readings, Summaries, System), path and query parameters with constraints and defaults, request bodies, and every response status the code can return (200, 201, 204, 304, 400, 401, 403, 404, 405, 406, 409, 412, 415) with its headers (Location, ETag, Last-Modified, Link, Allow, WWW-Authenticate).
+
+2. components: reusable schemas for each resource, the paginated envelope and the single Error schema; reusable parameters (page, page_size, sort, from, to, If-None-Match, If-Match); and two securitySchemes - bearerAuth (HTTP bearer JWT) for SLSEA users and deviceKey (apiKey in header X-Device-Key) for metering devices - applied per operation so the write-read split is visible in the documentation. Add realistic examples taken from the seed data, including a demo login from docs/demo-credentials.md.
+
+3. Serve it with swagger-ui-express at /api-docs and the raw spec at /api-docs/openapi.json. Redirect / to /api-docs. The servers entry uses the relative URL /api/v1 so "Try it out" works on localhost and when deployed. Enable persistAuthorization. Make sure helmet's Content-Security-Policy does not break the Swagger UI page (relax it for /api-docs only).
+
+4. Add npm run docs:lint to validate the spec and include it in npm test. Add a test that every route registered in Express appears in the spec and every path in the spec exists in Express, so the documentation cannot drift from the code.
+
+5. Add an "API documentation" section to README.md with the endpoint table.
+
+Then do the step wrap-up as Step 10 - OpenAPI and Swagger UI.
+```
+
+Summary of what was generated:
+
+- Hand-written `docs/openapi.yaml` (OpenAPI 3.0.3): 17 paths, 22 operations, reusable schemas, parameters, headers and error responses, bearerAuth and deviceKey applied per operation, examples from the seed.
+- Swagger UI at `/api-docs` (with persistAuthorization and a docs-only Content-Security-Policy), the raw spec at `/api-docs/openapi.json`, and `/` redirecting to the docs.
+- `npm run docs:lint` (run by `npm test`) and a drift test proving Express and the spec list the same operations with the same authentication; 187 tests in total.
