@@ -5,6 +5,14 @@ historical solar generation data from rooftop installations.
 
 Coursework for NB6007CEM Web API Development.
 
+**Live API** (AWS Lambda + API Gateway, ap-south-1): not deployed yet. After
+`npm run deploy`, the URLs go here:
+
+- API base URL: _to be filled in after first deploy_
+- Swagger UI: _to be filled in after first deploy_
+
+See [docs/deployment.md](docs/deployment.md) for the architecture and how to deploy.
+
 ## Purpose
 
 SLSEA needs one consistent HTTP interface for the solar generation readings that
@@ -20,6 +28,7 @@ rooftop installations report, both as they arrive (real-time) and over time
 - Data: MongoDB Atlas through Mongoose, or the seed JSON in memory (`DATA_SOURCE`)
 - JSON only; `snake_case` fields and query parameters; ISO 8601 UTC timestamps
 - Layering: routes -> controllers -> services -> repositories
+- Deployment: AWS Lambda (serverless-http) behind an API Gateway HTTP API, with AWS SAM
 - Tests: `node:test` + `supertest`
 - Lint and format: ESLint (flat config) + Prettier
 
@@ -46,6 +55,9 @@ npm test       # node:test + supertest: everything in tests/, including the seed
 npm run seed:mongo                       # load data/seed/ into MongoDB (replaces what is there)
 npm run smoke -- http://localhost:3000   # end-to-end checks against a running server
 npm run docs:lint                        # validate docs/openapi.yaml (also part of npm test)
+npm run deploy                           # build and deploy to AWS (see docs/deployment.md)
+npm run logs                             # follow the deployed function's logs
+npm run destroy                          # delete the AWS stack
 ```
 
 Then open http://localhost:3000/api-docs for the interactive documentation, or try
@@ -77,7 +89,8 @@ Everything else is optional:
 ```
 src/
   app.js            builds the Express app (no listening; tests use it directly)
-  server.js         starts the server on PORT
+  server.js         starts the server on PORT (local entry point)
+  lambda.js         AWS Lambda entry point: the same app, via serverless-http
   config/           settings from environment variables
   routes/           URL + method -> controller; index.js mounts everything under /api/v1,
                     docs.routes.js serves Swagger UI at /api-docs
@@ -91,7 +104,9 @@ src/
   serializers/      what clients see of each resource (explicit field lists)
   utils/            AppError, query validation, pagination, conditional GET, clock
 tests/              node:test + supertest
-scripts/            seed generator and validator
+scripts/            seed generator and validator, seed-mongo, smoke test, deploy
+template.yaml       AWS SAM template: Lambda function + HTTP API
+samconfig.toml      SAM CLI settings (stack name and region; no secrets)
 data/seed/          seed JSON, one array per collection
 ```
 
@@ -529,18 +544,19 @@ is git-ignored.
 
 ## Project status
 
-| Step | Title                                   | Status |
-| ---- | --------------------------------------- | ------ |
-| 1    | Project bootstrap                       | Done   |
-| 2    | Data model and seed data                | Done   |
-| 3    | Express skeleton and error contract     | Done   |
-| 4    | Hierarchy read path and conditional GET | Done   |
-| 5    | Operational and analytical reads        | Done   |
-| 6    | Authentication and jurisdiction scoping | Done   |
-| 7    | Write path and CRUD semantics           | Done   |
-| 8    | District generation summary             | Done   |
-| 9    | MongoDB persistence                     | Done   |
-| 10   | OpenAPI and Swagger UI                  | Done   |
+| Step | Title                                   | Status                              |
+| ---- | --------------------------------------- | ----------------------------------- |
+| 1    | Project bootstrap                       | Done                                |
+| 2    | Data model and seed data                | Done                                |
+| 3    | Express skeleton and error contract     | Done                                |
+| 4    | Hierarchy read path and conditional GET | Done                                |
+| 5    | Operational and analytical reads        | Done                                |
+| 6    | Authentication and jurisdiction scoping | Done                                |
+| 7    | Write path and CRUD semantics           | Done                                |
+| 8    | District generation summary             | Done                                |
+| 9    | MongoDB persistence                     | Done                                |
+| 10   | OpenAPI and Swagger UI                  | Done                                |
+| 11   | AWS deployment                          | Done (deploy pending AWS CLI setup) |
 
 ## AI disclosure
 

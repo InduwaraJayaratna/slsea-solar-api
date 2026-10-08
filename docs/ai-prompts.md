@@ -355,3 +355,33 @@ Summary of what was generated:
 - Hand-written `docs/openapi.yaml` (OpenAPI 3.0.3): 17 paths, 22 operations, reusable schemas, parameters, headers and error responses, bearerAuth and deviceKey applied per operation, examples from the seed.
 - Swagger UI at `/api-docs` (with persistAuthorization and a docs-only Content-Security-Policy), the raw spec at `/api-docs/openapi.json`, and `/` redirecting to the docs.
 - `npm run docs:lint` (run by `npm test`) and a drift test proving Express and the spec list the same operations with the same authentication; 187 tests in total.
+
+## Step 11 - AWS deployment
+
+Date: 2026-10-08
+
+Prompt:
+
+```text
+Step 11 - Deploy to AWS as Lambda + API Gateway (HTTP API) using AWS SAM. The AWS CLI and SAM CLI are installed and configured on this machine. Region: ap-south-1.
+
+1. Install serverless-http. Add src/lambda.js that wraps the existing Express app and awaits the cached MongoDB connection before handling each event. src/server.js stays as the local entry point. No other application code should need to change; if it does, explain why first.
+
+2. Add template.yaml: one AWS::Serverless::Function (runtime nodejs22.x, handler src/lambda.handler, memory 512 MB, timeout 15 s) behind an AWS::Serverless::HttpApi on the $default stage, so there is no stage prefix in the URL, with a catch-all route and CORS enabled. Parameters MongoDbUri and JwtSecret are NoEcho and are passed to the function as environment variables, together with MONGODB_DB, DATA_SOURCE=mongo and NODE_ENV=production. Outputs: the API base URL and the Swagger UI URL.
+
+3. Keep the deployment package small: exclude data/, tests/, scripts/, docs/reference/ and dev dependencies, but include docs/openapi.yaml. Confirm that Swagger UI's static assets load correctly through API Gateway.
+
+4. Add npm scripts: deploy (sam build, then sam deploy with --stack-name slsea-solar-api --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset, passing --parameter-overrides read from my local .env without echoing the values), logs (sam logs --tail) and destroy. Commit template.yaml. Commit samconfig.toml only if it contains no secrets.
+
+5. Build and deploy. Then, against the live HTTPS URL: run npm run smoke -- <live_base_url>, fetch /api-docs, and check that /api/v1/health reports data_source mongo with the seeded counts. If anything fails, read the CloudWatch logs with sam logs, fix it, and redeploy.
+
+6. Write docs/deployment.md: the architecture (client -> API Gateway HTTP API -> Lambda -> MongoDB Atlas) as a Mermaid diagram, the deploy commands, the environment variables, how to view logs, the known limits (cold starts; the 6 MB Lambda response cap and how the page_size maximum protects against it), and the live URLs. Put the live base URL and the Swagger URL at the top of README.md.
+
+Then do the step wrap-up as Step 11 - AWS deployment.
+```
+
+Summary of what was generated:
+
+- `src/lambda.js` (serverless-http around the unchanged Express app, awaiting the cached MongoDB connection, 503 when the database is down, base64 for binary assets), a SAM `template.yaml` (Lambda + HTTP API `$default` stage, catch-all route, CORS, NoEcho secrets, outputs) and a secret-free `samconfig.toml`.
+- `npm run deploy` (reads `.env` without echoing, builds, checks the package excludes data/tests/scripts, deploys), `logs` and `destroy`; `"files"` in package.json keeps the package to `src/` and `docs/openapi.yaml`; 5 Lambda handler tests (192 in total).
+- `docs/deployment.md` (Mermaid architecture, commands, variables, logs, known limits). The live deploy was not run: the AWS and SAM CLIs were not installed on the machine; the packaged handler was verified locally against Atlas instead.
