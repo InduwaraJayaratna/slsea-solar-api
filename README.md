@@ -45,9 +45,11 @@ npm run lint   # ESLint
 npm test       # node:test + supertest: everything in tests/, including the seed validator
 npm run seed:mongo                       # load data/seed/ into MongoDB (replaces what is there)
 npm run smoke -- http://localhost:3000   # end-to-end checks against a running server
+npm run docs:lint                        # validate docs/openapi.yaml (also part of npm test)
 ```
 
-Then try `curl http://localhost:3000/api/v1/health`.
+Then open http://localhost:3000/api-docs for the interactive documentation, or try
+`curl http://localhost:3000/api/v1/health`.
 
 Configuration: copy `.env.example` to `.env`. `JWT_SECRET` is required: the server
 refuses to start without one (at least 32 characters). Generate one with:
@@ -77,7 +79,8 @@ src/
   app.js            builds the Express app (no listening; tests use it directly)
   server.js         starts the server on PORT
   config/           settings from environment variables
-  routes/           URL + method -> controller; index.js mounts everything under /api/v1
+  routes/           URL + method -> controller; index.js mounts everything under /api/v1,
+                    docs.routes.js serves Swagger UI at /api-docs
   controllers/      HTTP in and out
   services/         business rules, no HTTP
   repositories/     the only code that touches data; index.js picks one by DATA_SOURCE
@@ -92,38 +95,58 @@ scripts/            seed generator and validator
 data/seed/          seed JSON, one array per collection
 ```
 
+## API documentation
+
+The API is described in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.0.3), the
+single source of truth for the documentation. With the server running:
+
+- **Swagger UI:** http://localhost:3000/api-docs (`/` redirects there)
+- **Raw spec:** http://localhost:3000/api-docs/openapi.json
+
+To try a protected endpoint in Swagger UI, call **POST /auth/tokens** with a demo login
+(e.g. `{"username": "dist.col", "password": "SolarDemo#2026"}`), copy `access_token`,
+click **Authorize**, and paste it under **bearerAuth**. The token stays after a page
+reload. Devices use **deviceKey** (`X-Device-Key`) instead, and only on the reading
+ingestion endpoint.
+
+`npm run docs:lint` validates the spec, and runs as part of `npm test`.
+`tests/openapi.test.js` checks that the spec and Express list exactly the same
+operations, each with the same authentication, so the documentation cannot drift
+from the code.
+
+| Method | Path (under `/api/v1`)                                   | Auth   | Returns                                                               |
+| ------ | -------------------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| GET    | `/health`                                                | none   | status, version, data source and record count per collection          |
+| POST   | `/auth/tokens`                                           | none   | sign in: an access token                                              |
+| GET    | `/provinces`                                             | user   | all provinces (collection)                                            |
+| GET    | `/provinces/{province_id}`                               | user   | one province                                                          |
+| GET    | `/provinces/{province_id}/districts`                     | user   | the province's districts (collection)                                 |
+| GET    | `/districts/{district_id}`                               | user   | one district                                                          |
+| GET    | `/districts/{district_id}/substations`                   | user   | the district's substations (collection)                               |
+| GET    | `/districts/{district_id}/generation-summary`            | user   | the district's generation today (or on `?date=`), computed on request |
+| GET    | `/substations/{substation_id}`                           | user   | one substation                                                        |
+| GET    | `/substations/{substation_id}/installations`             | user   | the substation's installations (collection)                           |
+| POST   | `/substations/{substation_id}/installations`             | admin  | create an installation (returns its device key once)                  |
+| GET    | `/installations`                                         | user   | installations across the estate (collection, filterable)              |
+| GET    | `/installations/{installation_id}`                       | user   | one installation                                                      |
+| PUT    | `/installations/{installation_id}`                       | admin  | replace its editable fields                                           |
+| PATCH  | `/installations/{installation_id}`                       | admin  | change some of its fields                                             |
+| DELETE | `/installations/{installation_id}`                       | admin  | delete it, if it has no readings                                      |
+| GET    | `/installations/{installation_id}/overview`              | user   | the installation with its parents, last reading and energy today      |
+| GET    | `/installations/{installation_id}/last-reading`          | user   | the latest reading, with `age_seconds` and `stale`                    |
+| GET    | `/installations/{installation_id}/readings`              | user   | its reading history (collection)                                      |
+| POST   | `/installations/{installation_id}/readings`              | device | a device reports a reading                                            |
+| GET    | `/installations/{installation_id}/readings/{reading_id}` | user   | one reading                                                           |
+| GET    | `/readings`                                              | user   | readings across the estate (collection, filterable)                   |
+
+Auth: **user** is a Bearer access token from any role (limited to the user's
+jurisdiction); **admin** is a Bearer token of the admin role; **device** is the
+installation's `X-Device-Key`.
+
 ## API
 
-Base path: `/api/v1`. The API speaks JSON only.
-
-Paths below are relative to `/api/v1`. Every GET except `/health` needs a user
-access token (see [Authentication](#authentication)); writes are covered in
-[Writes](#writes).
-
-| Method | Path                                                     | Returns                                                                                 |
-| ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| GET    | `/health`                                                | status, version, data source and record count per collection                            |
-| GET    | `/provinces`                                             | all provinces (collection)                                                              |
-| GET    | `/provinces/{province_id}`                               | one province                                                                            |
-| GET    | `/provinces/{province_id}/districts`                     | the province's districts (collection)                                                   |
-| GET    | `/districts/{district_id}`                               | one district                                                                            |
-| GET    | `/districts/{district_id}/substations`                   | the district's substations (collection)                                                 |
-| GET    | `/districts/{district_id}/generation-summary`            | the district's generation today (or on `?date=`), computed on request                   |
-| GET    | `/substations/{substation_id}`                           | one substation                                                                          |
-| GET    | `/substations/{substation_id}/installations`             | the substation's installations (collection)                                             |
-| GET    | `/installations`                                         | installations across the estate (collection, filterable)                                |
-| GET    | `/installations/{installation_id}`                       | one installation                                                                        |
-| GET    | `/installations/{installation_id}/overview`              | the installation with its substation, district, province, last reading and energy today |
-| GET    | `/installations/{installation_id}/last-reading`          | the latest reading, with `age_seconds` and `stale`                                      |
-| GET    | `/installations/{installation_id}/readings`              | the installation's reading history (collection)                                         |
-| GET    | `/installations/{installation_id}/readings/{reading_id}` | one reading                                                                             |
-| GET    | `/readings`                                              | readings across the estate (collection, filterable)                                     |
-| POST   | `/auth/tokens`                                           | sign in: an access token (open, no token needed)                                        |
-| POST   | `/installations/{installation_id}/readings`              | a device reports a reading (device key)                                                 |
-| POST   | `/substations/{substation_id}/installations`             | create an installation (admin)                                                          |
-| PUT    | `/installations/{installation_id}`                       | replace an installation's editable fields (admin)                                       |
-| PATCH  | `/installations/{installation_id}`                       | change some of its fields (admin)                                                       |
-| DELETE | `/installations/{installation_id}`                       | delete an installation that has no readings (admin)                                     |
+Base path: `/api/v1`. The API speaks JSON only. The endpoints are listed in
+[API documentation](#api-documentation).
 
 A nested collection returns 404 if its parent does not exist, and 200 with an empty
 `data` array if the parent exists but has no children.
@@ -517,6 +540,7 @@ is git-ignored.
 | 7    | Write path and CRUD semantics           | Done   |
 | 8    | District generation summary             | Done   |
 | 9    | MongoDB persistence                     | Done   |
+| 10   | OpenAPI and Swagger UI                  | Done   |
 
 ## AI disclosure
 
