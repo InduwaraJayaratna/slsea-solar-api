@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SLSEA Solar API - the Express app on AWS Lambda behind an API Gateway HTTP API,
+  with MongoDB Atlas as the data source.
+
+Parameters:
+  # NoEcho: CloudFormation shows these as **** in the console, the CLI and
+  # describe-stacks output. They are passed in by `npm run deploy` from .env.
+  MongoDbUri:
+    Type: String
+    NoEcho: true
+    Description: MongoDB Atlas connection string (contains the database password).
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Secret that signs access tokens (at least 32 characters).
+  MongoDbName:
+    Type: String
+    Default: slsea-solar
+    Description: Name of the MongoDB database.
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: SLSEA Solar API (Express via serverless-http)
+      # The package is built from the project folder by `sam build`, which runs
+      # `npm pack` (so only the paths in package.json "files" are included) and
+      # then installs production dependencies only.
+      CodeUri: .
+      Handler: src/lambda.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 15
+      Environment:
+        Variables:
+          NODE_ENV: production
+          DATA_SOURCE: mongo
+          MONGODB_URI: !Ref MongoDbUri
+          MONGODB_DB: !Ref MongoDbName
+          JWT_SECRET: !Ref JwtSecret
+      Events:
+        # One catch-all route: with no Path or Method, SAM creates the HTTP API's
+        # $default route, which receives every method and path (including /).
+        # Express does the routing and answers 404 and 405 itself.
+        CatchAll:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+
+  ApiFunctionLogGroup:
+    # Created here (not on first invocation) so logs are kept for 14 days
+    # instead of forever, and are deleted with the stack.
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ApiFunction}
+      RetentionInDays: 14
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # $default stage: the URL has no stage prefix, so paths are exactly the
+      # ones the app serves (/api/v1/..., /api-docs).
+      StageName: $default
+      # API Gateway answers CORS preflight (OPTIONS) itself and adds these
+      # headers to every response, replacing the ones Express's cors sets.
+      # They match the app's own CORS settings in src/app.js.
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: [GET, HEAD, POST, PUT, PATCH, DELETE]
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Device-Key
+          - If-Match
+          - If-None-Match
+          - If-Modified-Since
+        ExposeHeaders: [ETag, Last-Modified, Link, X-Request-Id, WWW-Authenticate]
+        MaxAge: 600
+
+Outputs:
+  ApiBaseUrl:
+    Description: Base URL of the API (version 1)
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/api/v1
+  SwaggerUiUrl:
+    Description: Interactive API documentation (Swagger UI)
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/api-docs/

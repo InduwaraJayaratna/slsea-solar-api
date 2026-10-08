@@ -1,0 +1,8 @@
+# SAM CLI settings for this project. No secrets here: MongoDbUri and JwtSecret
+# are passed by `npm run deploy` (scripts/deploy.js) from .env at deploy time
+# and are never saved to this file.
+version = 0.1
+
+[default.global.parameters]
+stack_name = "slsea-solar-api"
+region = "ap-south-1"

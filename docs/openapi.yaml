@@ -36,6 +36,8 @@ info:
       listing the ones it does (for example, readings are append-only, and
       provinces, districts and substations are read-only).
     - Every response has an `X-Request-Id` header, also written to the server log.
+    - If the database cannot be reached, any request gives **503** with a
+      `Retry-After` header and the usual error body (code `SERVICE_UNAVAILABLE`).
 servers:
   - url: /api/v1
     description: This server
