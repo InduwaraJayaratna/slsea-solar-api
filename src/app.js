@@ -9,7 +9,8 @@ const requestLogger = require('./middleware/request-logger');
 const contentNegotiation = require('./middleware/content-negotiation');
 const notFound = require('./middleware/not-found');
 const errorHandler = require('./middleware/error-handler');
-const routes = require('./routes');
+const { router: routes } = require('./routes');
+const docsRoutes = require('./routes/docs.routes');
 
 const app = express();
 
@@ -21,7 +22,35 @@ app.set('etag', false);
 // Order matters: each request passes through these from top to bottom.
 app.use(requestId); // first, so every later step (and log line) has the id
 app.use(requestLogger);
-// Security headers (e.g. X-Content-Type-Options: nosniff, Strict-Transport-Security).
+
+// The documentation is an HTML page, so it is mounted before the JSON-only
+// middleware (content negotiation answers 406 to clients that refuse JSON).
+// It gets its own Content-Security-Policy: Swagger UI needs inline styles and
+// data: images, and upgrade-insecure-requests is left out so the page also
+// works over plain http on localhost. Everything else keeps helmet's defaults.
+app.get('/', (req, res) => res.redirect('/api-docs'));
+app.use(
+  '/api-docs',
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'],
+        fontSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'self'"],
+      },
+    },
+  }),
+  docsRoutes,
+);
+
+// Security headers for the API (e.g. X-Content-Type-Options: nosniff,
+// Strict-Transport-Security, and a strict Content-Security-Policy).
 app.use(helmet());
 // Lets browser apps on other origins call the API. It also answers CORS
 // preflight (OPTIONS) requests, so it runs before content negotiation.
