@@ -5,6 +5,10 @@
   "private": true,
   "type": "commonjs",
   "main": "src/server.js",
+  "files": [
+    "src/",
+    "docs/openapi.yaml"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -17,7 +21,10 @@
     "seed:validate": "node scripts/validate-seed.js",
     "seed:mongo": "node scripts/seed-mongo.js",
     "smoke": "node scripts/smoke.js",
-    "docs:lint": "node scripts/lint-openapi.js"
+    "docs:lint": "node scripts/lint-openapi.js",
+    "deploy": "node scripts/deploy.js",
+    "logs": "sam logs --stack-name slsea-solar-api --region ap-south-1 --tail",
+    "destroy": "sam delete --stack-name slsea-solar-api --region ap-south-1"
   },
   "author": "Induwara Jayaratna",
   "license": "UNLICENSED",
