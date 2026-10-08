@@ -95,3 +95,14 @@ test('If-None-Match takes precedence over If-Modified-Since', async () => {
     .set('If-Modified-Since', first.headers['last-modified']);
   assert.equal(res.status, 200);
 });
+
+test('a conditional request from fetch() (with Cache-Control: no-cache) still gets 304', async () => {
+  // Browsers and Node's fetch() add these headers to any request that carries
+  // If-None-Match; they must not stop the server from answering 304.
+  const first = await api('/provinces/WP');
+  const second = await api('/provinces/WP')
+    .set('If-None-Match', first.headers.etag)
+    .set('Cache-Control', 'no-cache')
+    .set('Pragma', 'no-cache');
+  assert.equal(second.status, 304);
+});
