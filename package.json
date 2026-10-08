@@ -21,6 +21,7 @@
   "author": "Induwara Jayaratna",
   "license": "UNLICENSED",
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
@@ -36,8 +37,10 @@
     "express": "^5.2.1",
     "fresh": "^2.0.0",
     "helmet": "^8.3.0",
+    "js-yaml": "^5.4.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.11.1",
-    "morgan": "^1.12.1"
+    "morgan": "^1.12.1",
+    "swagger-ui-express": "^5.0.1"
   }
 }
