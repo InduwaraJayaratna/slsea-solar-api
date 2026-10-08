@@ -291,3 +291,39 @@ Summary of what was generated:
 - `GET /districts/{district_id}/generation-summary`: counts, current power, energy for the day, capacity, utilisation, peak and per-substation figures, computed on request, jurisdiction-scoped, with an optional `date` and a weak ETag for conditional GET.
 - One aggregate repository method, `readings.summariseByInstallations`, shaped like a MongoDB pipeline; the day-energy formula and staleness rule are now shared with the overview and last-reading.
 - 178 tests in total, including a brute-force check against the seed files, non-negative energy for every district and day, and 403 outside scope.
+
+## Step 9 - MongoDB persistence
+
+Date: 2026-10-08
+
+Prompt:
+
+```text
+Step 9 - Move the data from seed JSON into MongoDB Atlas and connect the API to it. My .env already contains MONGODB_URI and MONGODB_DB. Never print or commit the URI.
+
+1. Install mongoose. Add src/config/db.js with a connect function that caches the connection promise in module scope (it will be reused across AWS Lambda invocations later) and sets sensible timeouts.
+
+2. Mongoose models in src/models/ for Province, District, Substation, Installation, Reading and User. Keep the same snake_case field names as the seed, and keep our string id as a unique indexed field. Never expose _id or __v; strip them in the serializers. Indexes:
+   - readings: unique compound {installation_id: 1, timestamp: -1}, plus {timestamp: -1}
+   - installations: unique meter_id, unique inverter_id, and indexes on substation_id, district_id and province_id
+   - districts.province_id, substations.district_id, users.username (unique)
+   Add a comment on each index saying which endpoint it serves.
+
+3. scripts/seed-mongo.js (npm run seed:mongo): connect, then for each collection delete the existing documents, read the matching file in data/seed/ and insert it with insertMany in batches of 5,000 (ordered: false), converting timestamp strings to Date. Then sync indexes and print the document count per collection. It must be safe to re-run, and must refuse to run when NODE_ENV=production unless --force is passed.
+
+4. src/repositories/mongo/: implement exactly the same repository interface as the memory versions. Use real database queries: find with filter, sort, skip and limit plus countDocuments for pagination; findOne sorted by timestamp descending for last-reading; an aggregation pipeline for the district summary. Use lean() for reads. Map a duplicate-key error (code 11000) to our 409 conflict error.
+
+5. Switch src/repositories/index.js on DATA_SOURCE (memory | mongo), defaulting to mongo when MONGODB_URI is set. server.js connects before listening. /health reports data_source and live document counts. The layers above the repositories must not change. If you find you need to change a controller or service, stop and explain why first.
+
+6. Tests keep running against the memory source (fast, no network). Add scripts/smoke.js (npm run smoke -- <base_url>) that runs a short end-to-end pass against a running server and prints pass or fail per check: health; login as a district user; list installations; readings page 1; a 304 using the returned ETag; 403 on another district; device ingest of one reading (201 with Location); the district summary.
+
+7. Run npm run seed:mongo, start the server with DATA_SOURCE=mongo, run the smoke script against localhost, and show me the results.
+
+Then do the step wrap-up as Step 9 - MongoDB persistence.
+```
+
+Summary of what was generated:
+
+- Mongoose connection (cached promise, timeouts), six models plus a counters collection with commented indexes, and MongoDB repositories with the same interface as memory (find/sort/skip/limit with countDocuments, a $facet aggregation for the summary, 11000 mapped to 409).
+- `seed:mongo` (delete, batched insertMany, syncIndexes, counts, production guard) and `smoke` scripts; `DATA_SOURCE` switch with mongo as default when a URI is set; tests stay on memory.
+- Seeded Atlas (131,027 readings), matched 16/16 endpoints between memory and MongoDB, passed all 8 smoke checks, and fixed 304 for fetch() clients that send Cache-Control: no-cache.
