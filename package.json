@@ -14,7 +14,9 @@
     "test": "node --test",
     "lint": "eslint .",
     "seed:generate": "node scripts/generate-seed.js",
-    "seed:validate": "node scripts/validate-seed.js"
+    "seed:validate": "node scripts/validate-seed.js",
+    "seed:mongo": "node scripts/seed-mongo.js",
+    "smoke": "node scripts/smoke.js"
   },
   "author": "Induwara Jayaratna",
   "license": "UNLICENSED",
