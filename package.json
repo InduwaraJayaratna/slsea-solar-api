@@ -11,12 +11,13 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "node --test",
+    "test": "npm run docs:lint && node --test",
     "lint": "eslint .",
     "seed:generate": "node scripts/generate-seed.js",
     "seed:validate": "node scripts/validate-seed.js",
     "seed:mongo": "node scripts/seed-mongo.js",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "docs:lint": "node scripts/lint-openapi.js"
   },
   "author": "Induwara Jayaratna",
   "license": "UNLICENSED",
