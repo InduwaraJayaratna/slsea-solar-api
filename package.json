@@ -17,6 +17,8 @@
     "dev": "nodemon src/server.js",
     "test": "npm run docs:lint && node --test",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "seed:generate": "node scripts/generate-seed.js",
     "seed:validate": "node scripts/validate-seed.js",
     "seed:mongo": "node scripts/seed-mongo.js",

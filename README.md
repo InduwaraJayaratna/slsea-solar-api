@@ -95,6 +95,8 @@ covers the architecture, setup, logs and known limits.
 | `npm run dev`            | the same, restarting on file changes (nodemon)                                    |
 | `npm test`               | validate the OpenAPI spec, then run every test in `tests/` (node:test, supertest) |
 | `npm run lint`           | ESLint                                                                            |
+| `npm run format`         | format every file with Prettier                                                   |
+| `npm run format:check`   | check formatting without changing files                                           |
 | `npm run docs:lint`      | validate `docs/openapi.yaml`                                                      |
 | `npm run seed:generate`  | regenerate `data/seed/` (the week of readings ends now)                           |
 | `npm run seed:validate`  | check the seed: scale, unique ids, foreign keys, meter totals                     |
