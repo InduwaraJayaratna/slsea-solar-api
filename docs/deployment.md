@@ -1,12 +1,17 @@
 # Deployment (AWS Lambda + API Gateway HTTP API)
 
-**Live URLs**: not deployed yet. After the first `npm run deploy`, copy the two
-URLs from the stack outputs here and at the top of the README.
+**Live URLs** (stack `slsea-solar-api`, ap-south-1):
 
-| What       | URL                                  |
-| ---------- | ------------------------------------ |
-| API base   | _to be filled in after first deploy_ |
-| Swagger UI | _to be filled in after first deploy_ |
+| What       | URL                                                                           |
+| ---------- | ----------------------------------------------------------------------------- |
+| API base   | https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api/v1                |
+| Swagger UI | https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api-docs/             |
+| Raw spec   | https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api-docs/openapi.json |
+
+Verified on 2026-10-09: `/api/v1/health` reports `data_source: mongo` with the
+seeded counts, Swagger UI and its assets load, and `npm run smoke` passes all 8
+checks against the live URL. [coverage-map.md](coverage-map.md) has the full set of
+live curl results.
 
 ## Architecture
 

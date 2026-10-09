@@ -9,6 +9,7 @@ const clock = require('../src/utils/clock');
 const repositories = require('../src/repositories');
 const seedInstallations = require('../data/seed/installations.json');
 const seedReadings = require('../data/seed/readings.json');
+const { DAY_MS, SEED_END_MS, toIso, sriLankaDateOf } = require('./helpers/seed-window');
 
 // Every read needs a token; admin sees everything, so these tests are not
 // affected by jurisdiction (tested in jurisdiction.test.js).
@@ -104,23 +105,27 @@ test('overview contains the installation and all four hierarchy levels', async (
 });
 
 test("overview's energy today is the meter total today minus the total before local midnight", async (t) => {
-  // 23:59 on 5 October in Sri Lanka; that local day is 2026-10-04T18:30Z to 2026-10-05T18:30Z.
-  t.mock.method(clock, 'now', () => Date.parse('2026-10-05T18:29:00Z'));
+  // 23:59 in Sri Lanka on the last whole day of the seed. A Sri Lanka day runs
+  // from 18:30 UTC the day before to 18:30 UTC.
+  const day = sriLankaDateOf(SEED_END_MS - DAY_MS);
+  const dayStart = Date.parse(`${day}T00:00:00+05:30`);
+  t.mock.method(clock, 'now', () => dayStart + DAY_MS - 60 * 1000);
   const readings = readingsOf(ACTIVE);
-  const beforeMidnight = readings.filter((r) => r.timestamp < '2026-10-04T18:30:00Z').at(-1);
-  const latestToday = readings.filter((r) => r.timestamp < '2026-10-05T18:30:00Z').at(-1);
+  const beforeMidnight = readings.filter((r) => r.timestamp < toIso(dayStart)).at(-1);
+  const latestToday = readings.filter((r) => r.timestamp < toIso(dayStart + DAY_MS)).at(-1);
   const expected = Number((latestToday.energy_kwh - beforeMidnight.energy_kwh).toFixed(3));
 
   const res = await api(`/installations/${ACTIVE}/overview`);
 
-  assert.deepEqual(res.body.today, { date: '2026-10-05', energy_kwh: expected });
+  assert.deepEqual(res.body.today, { date: day, energy_kwh: expected });
   assert.ok(expected > 0); // a whole day of sun
 });
 
 test("overview's energy today is 0 before the installation reports today", async (t) => {
-  t.mock.method(clock, 'now', () => Date.parse('2026-12-01T06:00:00Z')); // after the seed ends
+  const later = SEED_END_MS + 60 * DAY_MS; // long after the seed ends
+  t.mock.method(clock, 'now', () => later);
   const res = await api(`/installations/${ACTIVE}/overview`);
-  assert.deepEqual(res.body.today, { date: '2026-12-01', energy_kwh: 0 });
+  assert.deepEqual(res.body.today, { date: sriLankaDateOf(later), energy_kwh: 0 });
 });
 
 test('overview of an unknown installation returns 404', async () => {

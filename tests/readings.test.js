@@ -7,6 +7,7 @@ const { bearer } = require('./helpers/auth');
 const assertError = require('./helpers/assert-error');
 const seedInstallations = require('../data/seed/installations.json');
 const seedReadings = require('../data/seed/readings.json');
+const { DAY_MS, SEED_END_MS, utcDateOf } = require('./helpers/seed-window');
 
 // Every read needs a token; admin sees everything, so these tests are not
 // affected by jurisdiction (tested in jurisdiction.test.js).
@@ -17,6 +18,11 @@ const parametersIn = (res) => res.body.error.details.map((d) => d.parameter);
 // An installation that reported in every slot of the week.
 const ACTIVE = seedInstallations.find((i) => i.status === 'active').id;
 const HISTORY = `/installations/${ACTIVE}/readings`;
+
+// A whole UTC day inside the seed window (DAY), and the days either side.
+const PREVIOUS_DAY = utcDateOf(SEED_END_MS - 4 * DAY_MS);
+const DAY = utcDateOf(SEED_END_MS - 3 * DAY_MS);
+const NEXT_DAY = utcDateOf(SEED_END_MS - 2 * DAY_MS);
 
 test('history pages do not overlap and the total is 672', async () => {
   const page1 = await api(`${HISTORY}?page=1&page_size=100`);
@@ -45,32 +51,32 @@ test('sort=timestamp returns history oldest first', async () => {
 
 test('a one-day window returns 96 readings (from inclusive, to exclusive)', async () => {
   const res = await api(
-    `${HISTORY}?from=2026-10-01T00:00:00Z&to=2026-10-02T00:00:00Z&sort=timestamp&page_size=200`,
+    `${HISTORY}?from=${DAY}T00:00:00Z&to=${NEXT_DAY}T00:00:00Z&sort=timestamp&page_size=200`,
   );
 
   assert.equal(res.status, 200);
   assert.equal(res.body.pagination.total, 96);
-  assert.equal(res.body.data[0].timestamp, '2026-10-01T00:00:00Z');
-  assert.equal(res.body.data.at(-1).timestamp, '2026-10-01T23:45:00Z');
+  assert.equal(res.body.data[0].timestamp, `${DAY}T00:00:00Z`);
+  assert.equal(res.body.data.at(-1).timestamp, `${DAY}T23:45:00Z`);
 });
 
 test('a window with a time zone offset is converted to UTC', async () => {
   // Midnight to midnight in Sri Lanka is 18:30 to 18:30 UTC: still 96 slots.
-  const from = encodeURIComponent('2026-10-01T00:00:00+05:30');
-  const to = encodeURIComponent('2026-10-02T00:00:00+05:30');
+  const from = encodeURIComponent(`${DAY}T00:00:00+05:30`);
+  const to = encodeURIComponent(`${NEXT_DAY}T00:00:00+05:30`);
   const res = await api(`${HISTORY}?from=${from}&to=${to}&sort=timestamp`);
 
   assert.equal(res.body.pagination.total, 96);
-  assert.equal(res.body.data[0].timestamp, '2026-09-30T18:30:00Z');
+  assert.equal(res.body.data[0].timestamp, `${PREVIOUS_DAY}T18:30:00Z`);
 });
 
 test('pagination links keep the window and sort', async () => {
-  const res = await api(`${HISTORY}?from=2026-10-01&to=2026-10-02&sort=timestamp&page_size=10`);
+  const res = await api(`${HISTORY}?from=${DAY}&to=${NEXT_DAY}&sort=timestamp&page_size=10`);
   const next = new URL(res.body.links.next, 'http://localhost');
 
   assert.equal(next.pathname, `/api/v1${HISTORY}`);
-  assert.equal(next.searchParams.get('from'), '2026-10-01');
-  assert.equal(next.searchParams.get('to'), '2026-10-02');
+  assert.equal(next.searchParams.get('from'), DAY);
+  assert.equal(next.searchParams.get('to'), NEXT_DAY);
   assert.equal(next.searchParams.get('sort'), 'timestamp');
   assert.equal(next.searchParams.get('page'), '2');
   assert.match(res.headers.link, /rel="next"/);
@@ -81,7 +87,7 @@ test('history of an unknown installation returns 404', async () => {
 });
 
 test('GET /installations/{id}/readings/{reading_id} returns one reading', async () => {
-  const readingId = `${ACTIVE}-20261001T0600Z`;
+  const readingId = `${ACTIVE}-${DAY.replaceAll('-', '')}T0600Z`;
   const res = await api(`${HISTORY}/${readingId}`);
 
   assert.equal(res.status, 200);
@@ -94,7 +100,7 @@ test('GET /installations/{id}/readings/{reading_id} returns one reading', async 
     'voltage_v',
   ]);
   assert.equal(res.body.id, readingId);
-  assert.equal(res.headers['last-modified'], new Date('2026-10-01T06:00:00Z').toUTCString());
+  assert.equal(res.headers['last-modified'], new Date(`${DAY}T06:00:00Z`).toUTCString());
 });
 
 test("a reading is 404 under another installation's path", async () => {
@@ -128,14 +134,14 @@ test('jurisdiction filters combine with the time window', async () => {
   const expected = seedReadings.filter(
     (r) =>
       onSubstation.has(r.installation_id) &&
-      r.timestamp >= '2026-10-01T00:00:00Z' &&
-      r.timestamp < '2026-10-02T00:00:00Z',
+      r.timestamp >= `${DAY}T00:00:00Z` &&
+      r.timestamp < `${NEXT_DAY}T00:00:00Z`,
   ).length;
-  const res = await api('/readings?substation_id=SUB-001&from=2026-10-01&to=2026-10-02');
+  const res = await api(`/readings?substation_id=SUB-001&from=${DAY}&to=${NEXT_DAY}`);
 
   assert.equal(res.body.pagination.total, expected);
   assert.ok(res.body.data.every((r) => onSubstation.has(r.installation_id)));
-  assert.ok(res.body.data.every((r) => r.timestamp.startsWith('2026-10-01')));
+  assert.ok(res.body.data.every((r) => r.timestamp.startsWith(DAY)));
 });
 
 test('installation_id on /readings matches that installation only', async () => {
@@ -150,9 +156,9 @@ test('a jurisdiction with no installations returns an empty page, not every read
 });
 
 test('reading collections send Last-Modified from the newest matching reading', async () => {
-  const res = await api(`${HISTORY}?to=2026-10-01T00:00:00Z&sort=timestamp`);
+  const res = await api(`${HISTORY}?to=${DAY}T00:00:00Z&sort=timestamp`);
   // The newest reading before the window ends, whatever the page shows.
-  assert.equal(res.headers['last-modified'], new Date('2026-09-30T23:45:00Z').toUTCString());
+  assert.equal(res.headers['last-modified'], new Date(`${PREVIOUS_DAY}T23:45:00Z`).toUTCString());
 });
 
 test('a reading collection supports a 304 round trip', async () => {

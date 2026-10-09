@@ -8,6 +8,7 @@ const { bearer } = require('./helpers/auth');
 const assertError = require('./helpers/assert-error');
 const config = require('../src/config');
 const seedUsers = require('../data/seed/users.json');
+const { DAY_MS, SEED_END_MS, utcDateOf } = require('./helpers/seed-window');
 
 const DEMO_PASSWORD = 'SolarDemo#2026';
 const login = (body) => request(app).post('/api/v1/auth/tokens').send(body);
@@ -26,7 +27,7 @@ const READ_PATHS = [
   '/installations/INST-0001/overview',
   '/installations/INST-0001/last-reading',
   '/installations/INST-0001/readings',
-  '/installations/INST-0001/readings/INST-0001-20261001T0600Z',
+  `/installations/INST-0001/readings/INST-0001-${utcDateOf(SEED_END_MS - 3 * DAY_MS).replaceAll('-', '')}T0600Z`,
   '/readings',
 ];
 

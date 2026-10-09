@@ -11,10 +11,16 @@ const seedInstallations = require('../data/seed/installations.json');
 const seedSubstations = require('../data/seed/substations.json');
 const seedDistricts = require('../data/seed/districts.json');
 const seedReadings = require('../data/seed/readings.json');
+const { DAY_MS, SEED_END_MS, toIso, sriLankaDateOf } = require('./helpers/seed-window');
 
 // Ten minutes after the seed's last reading, so active installations are reporting.
-const NOW = Date.parse('2026-10-06T00:10:00Z');
+const NOW = SEED_END_MS + 10 * 60 * 1000;
 mock.method(clock, 'now', () => NOW);
+
+// Sri Lanka dates: today (when NOW falls) and whole days inside the seed window.
+const TODAY = sriLankaDateOf(NOW);
+const daysAgo = (n) => sriLankaDateOf(NOW - n * DAY_MS);
+const YESTERDAY = daysAgo(1);
 
 const ADMIN = bearer('admin');
 const summary = (districtId, query = '', token = ADMIN) =>
@@ -91,35 +97,34 @@ function bruteForce(districtId, date) {
   };
 }
 
-test('the totals equal a brute-force calculation over the seed (Colombo, 5 October)', async () => {
-  const res = await summary('COL', '?date=2026-10-05');
+test('the totals equal a brute-force calculation over the seed (Colombo, yesterday)', async () => {
+  const res = await summary('COL', `?date=${YESTERDAY}`);
 
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.district, { id: 'COL', name: 'Colombo', province_id: 'WP' });
-  assert.equal(res.body.date, '2026-10-05');
-  assert.equal(res.body.generated_at, '2026-10-06T00:10:00Z');
+  assert.equal(res.body.date, YESTERDAY);
+  assert.equal(res.body.generated_at, toIso(NOW));
   const figures = figuresOf(res.body);
-  assert.deepEqual(figures, bruteForce('COL', '2026-10-05'));
+  assert.deepEqual(figures, bruteForce('COL', YESTERDAY));
   assert.ok(figures.energy_today_kwh > 0 && figures.peak_power_kw > 0); // a sunny day
 });
 
 test('the totals also match for a district with offline installations', async () => {
   // The district of the first installation that is not active.
   const districtId = seedInstallations.find((i) => i.status !== 'active').district_id;
-  const res = await summary(districtId, '?date=2026-10-03');
+  const res = await summary(districtId, `?date=${daysAgo(3)}`);
   const figures = figuresOf(res.body);
-  assert.deepEqual(figures, bruteForce(districtId, '2026-10-03'));
+  assert.deepEqual(figures, bruteForce(districtId, daysAgo(3)));
   assert.ok(figures.offline_count > 0);
 });
 
 test('the date defaults to today in Sri Lanka', async () => {
-  // 00:10 UTC is 05:40 on 6 October in Sri Lanka.
   const res = await summary('COL');
-  assert.equal(res.body.date, '2026-10-06');
+  assert.equal(res.body.date, TODAY);
 });
 
 test('energy_today_kwh is never negative, for any district or day', async () => {
-  const dates = ['2026-09-29', '2026-10-01', '2026-10-03', '2026-10-05', '2026-10-06'];
+  const dates = [6, 4, 3, 1, 0].map(daysAgo);
   for (const { id } of seedDistricts) {
     for (const date of dates) {
       const res = await summary(id, `?date=${date}`);
@@ -159,7 +164,7 @@ test('an invalid or future date returns 400 naming date', async () => {
       date,
     );
   }
-  const future = await summary('COL', '?date=2026-10-08');
+  const future = await summary('COL', `?date=${daysAgo(-2)}`);
   assertError(future, 400, 'BAD_REQUEST');
   assert.equal(future.body.error.details[0].message, 'must not be in the future');
 });
@@ -170,12 +175,15 @@ test('the summary needs a token', async () => {
 });
 
 test('conditional GET: a weak ETag that survives a new generated_at, giving 304', async () => {
-  const first = await summary('COL', '?date=2026-10-05');
+  const first = await summary('COL', `?date=${YESTERDAY}`);
   assert.match(first.headers.etag, /^W\//);
 
   // A second later the body has a new generated_at, but the figures are the same.
   clock.now.mock.mockImplementation(() => NOW + 1000);
-  const second = await summary('COL', '?date=2026-10-05').set('If-None-Match', first.headers.etag);
+  const second = await summary('COL', `?date=${YESTERDAY}`).set(
+    'If-None-Match',
+    first.headers.etag,
+  );
   assert.equal(second.status, 304);
   clock.now.mock.mockImplementation(() => NOW);
 });
