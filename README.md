@@ -5,13 +5,19 @@ historical solar generation data from rooftop installations.
 
 Coursework for NB6007CEM Web API Development.
 
-**Live API** (AWS Lambda + API Gateway, ap-south-1): not deployed yet. After
-`npm run deploy`, the URLs go here:
+## Live API
 
-- API base URL: _to be filled in after first deploy_
-- Swagger UI: _to be filled in after first deploy_
+Deployed on AWS Lambda behind an API Gateway HTTP API (ap-south-1), with MongoDB
+Atlas holding the seed data.
 
-See [docs/deployment.md](docs/deployment.md) for the architecture and how to deploy.
+- **API base URL:** https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api/v1
+- **Swagger UI:** https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api-docs/
+- **Health:** https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api/v1/health
+
+Demo logins and a device key are in [docs/demo-credentials.md](docs/demo-credentials.md).
+Every login uses the password `SolarDemo#2026`; `dist.col` (Colombo) is a good one to
+start with. [docs/coverage-map.md](docs/coverage-map.md) proves each capability in the
+brief with a curl command against the live API.
 
 ## Purpose
 
@@ -42,35 +48,66 @@ rooftop installations report, both as they arrive (real-time) and over time
 No squashing, rebasing or force pushing, so every commit stays visible in `main`'s
 history.
 
-## How to run
+## Quick start
 
 Requirements: Node.js 22 (`nvm use` picks it up from `.nvmrc`).
 
+### Local, in-memory data (no database)
+
 ```sh
 npm install
-npm start      # start the API on http://localhost:3000
-npm run dev    # same, restarting on file changes (nodemon)
-npm run lint   # ESLint
-npm test       # node:test + supertest: everything in tests/, including the seed validator
-npm run seed:mongo                       # load data/seed/ into MongoDB (replaces what is there)
-npm run smoke -- http://localhost:3000   # end-to-end checks against a running server
-npm run docs:lint                        # validate docs/openapi.yaml (also part of npm test)
-npm run deploy                           # build and deploy to AWS (see docs/deployment.md)
-npm run logs                             # follow the deployed function's logs
-npm run destroy                          # delete the AWS stack
+cp .env.example .env
+# set JWT_SECRET in .env (32+ characters); generate one with:
+node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+DATA_SOURCE=memory npm start
 ```
 
-Then open http://localhost:3000/api-docs for the interactive documentation, or try
-`curl http://localhost:3000/api/v1/health`.
+The API serves the seed JSON in `data/seed/` from memory. Open
+http://localhost:3000/api-docs, or try `curl http://localhost:3000/api/v1/health`.
+Writes are kept only until the server stops.
 
-Configuration: copy `.env.example` to `.env`. `JWT_SECRET` is required: the server
-refuses to start without one (at least 32 characters). Generate one with:
+### Local, MongoDB
 
 ```sh
-node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+# in .env: MONGODB_URI (your Atlas connection string) and MONGODB_DB
+npm run seed:mongo                        # load data/seed/ into MongoDB
+npm start                                 # uses MongoDB whenever MONGODB_URI is set
+npm run smoke -- http://localhost:3000    # end-to-end checks
 ```
 
-Everything else is optional:
+In Atlas, under Network Access, allow your IP address. See [Data sources](#data-sources).
+
+### Deploy to AWS
+
+```sh
+npm run deploy                            # sam build + sam deploy, secrets read from .env
+```
+
+Before the first deploy, install and configure the AWS CLI and SAM CLI, and allow
+`0.0.0.0/0` in Atlas so Lambda can connect. [docs/deployment.md](docs/deployment.md)
+covers the architecture, setup, logs and known limits.
+
+## npm scripts
+
+| Script                   | What it does                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `npm start`              | start the API on `PORT` (default 3000)                                            |
+| `npm run dev`            | the same, restarting on file changes (nodemon)                                    |
+| `npm test`               | validate the OpenAPI spec, then run every test in `tests/` (node:test, supertest) |
+| `npm run lint`           | ESLint                                                                            |
+| `npm run docs:lint`      | validate `docs/openapi.yaml`                                                      |
+| `npm run seed:generate`  | regenerate `data/seed/` (the week of readings ends now)                           |
+| `npm run seed:validate`  | check the seed: scale, unique ids, foreign keys, meter totals                     |
+| `npm run seed:mongo`     | replace the MongoDB data with `data/seed/` and create the indexes                 |
+| `npm run smoke -- <url>` | 8 end-to-end checks against a running server (local or live)                      |
+| `npm run deploy`         | build and deploy to AWS with SAM                                                  |
+| `npm run logs`           | follow the deployed function's CloudWatch logs                                    |
+| `npm run destroy`        | delete the AWS stack                                                              |
+
+## Environment variables
+
+Copy `.env.example` to `.env`; `.env` is git-ignored. `JWT_SECRET` is required:
+the server refuses to start without one of at least 32 characters.
 
 | Variable         | Default                                        | Meaning                                                                                 |
 | ---------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -103,20 +140,29 @@ src/
   middleware/       request id, logging, content negotiation, 404, errors
   serializers/      what clients see of each resource (explicit field lists)
   utils/            AppError, query validation, pagination, conditional GET, clock
-tests/              node:test + supertest
-scripts/            seed generator and validator, seed-mongo, smoke test, deploy
+tests/              node:test + supertest; helpers/ has shared test setup
+scripts/            seed generator and validator, seed-mongo, smoke test, deploy, spec lint
+data/seed/          seed JSON, one array per collection
+docs/
+  openapi.yaml      the OpenAPI 3.0.3 spec (served as Swagger UI)
+  data-model.md     entities, relationships and modelling decisions
+  coverage-map.md   each capability in the brief, proved against the live API
+  deployment.md     AWS architecture, deploy commands, logs and known limits
+  demo-credentials.md  demo logins and device keys (generated with the seed)
+  ai-prompts.md     every prompt used to build the project
 template.yaml       AWS SAM template: Lambda function + HTTP API
 samconfig.toml      SAM CLI settings (stack name and region; no secrets)
-data/seed/          seed JSON, one array per collection
 ```
 
 ## API documentation
 
 The API is described in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.0.3), the
-single source of truth for the documentation. With the server running:
+single source of truth for the documentation.
 
-- **Swagger UI:** http://localhost:3000/api-docs (`/` redirects there)
-- **Raw spec:** http://localhost:3000/api-docs/openapi.json
+- **Swagger UI:** [live](https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api-docs/),
+  or http://localhost:3000/api-docs locally (`/` redirects there)
+- **Raw spec:** [live](https://m9ax7pv54m.execute-api.ap-south-1.amazonaws.com/api-docs/openapi.json),
+  or http://localhost:3000/api-docs/openapi.json locally
 
 To try a protected endpoint in Swagger UI, call **POST /auth/tokens** with a demo login
 (e.g. `{"username": "dist.col", "password": "SolarDemo#2026"}`), copy `access_token`,
@@ -202,27 +248,47 @@ computed on request from every installation in the district, and nothing is stor
 It follows the same jurisdiction rules as the district itself (403 outside your
 scope).
 
+Live, for 8 October:
+
 ```json
 {
-  "district": { "id": "COL", "name": "Colombo", "province_id": "WP" },
-  "date": "2026-10-05",
-  "generated_at": "2026-10-06T00:10:00Z",
+  "district": {
+    "id": "COL",
+    "name": "Colombo",
+    "province_id": "WP"
+  },
+  "date": "2026-10-08",
+  "generated_at": "2026-10-09T03:19:27Z",
   "installation_count": 21,
   "reporting_count": 19,
   "offline_count": 2,
-  "current_power_kw": 0,
-  "energy_today_kwh": 1172.483,
+  "current_power_kw": 92.097,
+  "energy_today_kwh": 643.139,
   "installed_capacity_kw": 236,
-  "utilisation_pct": 0,
-  "peak_power_kw": 150.376,
-  "peak_at": "2026-10-05T06:00:00Z",
+  "utilisation_pct": 39.02,
+  "peak_power_kw": 83.757,
+  "peak_at": "2026-10-08T06:30:00Z",
   "by_substation": [
     {
       "substation_id": "SUB-001",
       "name": "Kolonnawa Grid Substation",
       "installation_count": 7,
-      "current_power_kw": 0,
-      "energy_today_kwh": 288.046
+      "current_power_kw": 20.851,
+      "energy_today_kwh": 154.584
+    },
+    {
+      "substation_id": "SUB-002",
+      "name": "Dehiwala Grid Substation",
+      "installation_count": 7,
+      "current_power_kw": 38.585,
+      "energy_today_kwh": 251.956
+    },
+    {
+      "substation_id": "SUB-003",
+      "name": "Maharagama Grid Substation",
+      "installation_count": 7,
+      "current_power_kw": 32.661,
+      "energy_today_kwh": 236.599
     }
   ]
 }
@@ -388,7 +454,7 @@ an impossible date, or `from` not before `to` returns 400.
 installations, then their readings are returned.
 
 ```sh
-curl 'http://localhost:3000/api/v1/readings?district_id=COL&from=2026-10-01&to=2026-10-02&sort=timestamp'
+curl 'http://localhost:3000/api/v1/readings?district_id=COL&from=2026-10-07&to=2026-10-08&sort=timestamp'
 ```
 
 `last-reading` is a derived resource: the newest reading, plus `age_seconds` (how old
@@ -396,7 +462,7 @@ it is now) and `stale` (`true` when older than 30 minutes, since installations r
 every 15). It returns 404 `NOT_FOUND` for an unknown installation and 404
 `NO_READINGS` for one that has not reported yet.
 
-`overview` gives an operations screen everything in one response:
+`overview` gives an operations screen everything in one response (live, INST-0001 at 03:19 UTC on 9 October):
 
 ```json
 {
@@ -405,21 +471,21 @@ every 15). It returns 404 `NOT_FOUND` for an unknown installation and 404
   "district": { "id": "COL", "name": "Colombo" },
   "province": { "id": "WP", "name": "Western" },
   "last_reading": {
-    "id": "INST-0001-20261006T0000Z",
-    "timestamp": "2026-10-06T00:00:00Z",
+    "id": "INST-0001-20261009T0316Z",
+    "timestamp": "2026-10-09T03:16:00Z",
     "...": "..."
   },
-  "today": { "date": "2026-10-06", "energy_kwh": 0 }
+  "today": { "date": "2026-10-09", "energy_kwh": 7.132 }
 }
 ```
 
 `today` is the current Sri Lanka calendar day (UTC+05:30). `energy_kwh` is the latest
 meter total today minus the last total before local midnight.
 
-The committed seed data ends at 2026-10-06 00:00 UTC, so against the real clock
-every `last-reading` is stale and today's energy is 0. For a live-looking demo,
-regenerate the seed so it ends now (`npm run seed:generate`). Doing so changes the
-committed files.
+The committed seed ends at 2026-10-09 03:00 UTC. As time passes with no devices
+reporting, every `last-reading` turns stale (after 30 minutes) and today's energy
+falls to 0. Before a live demo, run `npm run seed:generate` and `npm run seed:mongo`
+so the week of readings ends now.
 
 ### Conditional GET and caching
 
@@ -528,14 +594,15 @@ Seed data lives in `data/seed/`, as one flat JSON array per collection:
 
 ```sh
 npm run seed:generate                                 # window ends now (rounded down to 15 min)
-npm run seed:generate -- --end=2026-10-06T00:00:00Z --days=7
+npm run seed:generate -- --end=2026-10-09T03:00:00Z --days=7   # reproduce the committed seed
 npm run seed:validate                                 # scale, unique ids, foreign keys, meter totals
 ```
 
 The generator is deterministic: the same `--end` and `--days` always give identical
-files. The committed seed was generated with `--end=2026-10-06T00:00:00Z --days=7`.
-Pass the same values when regenerating, so the files only change when the data
-should.
+files. The committed seed was generated on 2026-10-09, so it ends at
+`2026-10-09T03:00:00Z`; pass that `--end` to reproduce it exactly. Only the times
+move when the end changes: ids, users and device keys stay the same. The tests read
+the seed's window from the seed itself, so they pass whichever end was used.
 
 Demo logins and sample device keys are in
 [docs/demo-credentials.md](docs/demo-credentials.md) (seed/demo data only). Plaintext
@@ -544,19 +611,20 @@ is git-ignored.
 
 ## Project status
 
-| Step | Title                                   | Status                              |
-| ---- | --------------------------------------- | ----------------------------------- |
-| 1    | Project bootstrap                       | Done                                |
-| 2    | Data model and seed data                | Done                                |
-| 3    | Express skeleton and error contract     | Done                                |
-| 4    | Hierarchy read path and conditional GET | Done                                |
-| 5    | Operational and analytical reads        | Done                                |
-| 6    | Authentication and jurisdiction scoping | Done                                |
-| 7    | Write path and CRUD semantics           | Done                                |
-| 8    | District generation summary             | Done                                |
-| 9    | MongoDB persistence                     | Done                                |
-| 10   | OpenAPI and Swagger UI                  | Done                                |
-| 11   | AWS deployment                          | Done (deploy pending AWS CLI setup) |
+| Step | Title                                   | Status |
+| ---- | --------------------------------------- | ------ |
+| 1    | Project bootstrap                       | Done   |
+| 2    | Data model and seed data                | Done   |
+| 3    | Express skeleton and error contract     | Done   |
+| 4    | Hierarchy read path and conditional GET | Done   |
+| 5    | Operational and analytical reads        | Done   |
+| 6    | Authentication and jurisdiction scoping | Done   |
+| 7    | Write path and CRUD semantics           | Done   |
+| 8    | District generation summary             | Done   |
+| 9    | MongoDB persistence                     | Done   |
+| 10   | OpenAPI and Swagger UI                  | Done   |
+| 11   | AWS deployment                          | Done   |
+| 12   | Verification and release (v1.0.0)       | Done   |
 
 ## AI disclosure
 
