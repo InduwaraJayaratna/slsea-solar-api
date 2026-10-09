@@ -759,12 +759,12 @@ components:
       name: from
       in: query
       description: Start of the time window, inclusive. A date (00:00 UTC) or a date-time with a time zone; write `+` as `%2B`. Must be before `to`.
-      schema: { type: string, example: '2026-10-01T00:00:00Z' }
+      schema: { type: string, example: '2026-10-07T00:00:00Z' }
     To:
       name: to
       in: query
       description: End of the time window, exclusive. Same format as `from`.
-      schema: { type: string, example: '2026-10-02T00:00:00Z' }
+      schema: { type: string, example: '2026-10-08T00:00:00Z' }
     IfNoneMatch:
       name: If-None-Match
       in: header
