@@ -3,6 +3,10 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 require('./helpers/test-env');
 const repositories = require('../src/repositories');
+const { DAY_MS, SEED_END_MS, utcDateOf } = require('./helpers/seed-window');
+
+// A whole UTC day inside the seed window.
+const DAY = utcDateOf(SEED_END_MS - 3 * DAY_MS);
 
 test('repository methods return Promises', () => {
   assert.ok(repositories.provinces.findById('WP') instanceof Promise);
@@ -34,11 +38,11 @@ test('readings.findMany returns one page and the total, in either order', async 
 
 test('readings.findMany applies a [from, to) window', async () => {
   const { items, total } = await repositories.readings.findMany(
-    { installation_ids: ['INST-0001'], from: '2026-10-01T00:00:00Z', to: '2026-10-01T01:00:00Z' },
+    { installation_ids: ['INST-0001'], from: `${DAY}T00:00:00Z`, to: `${DAY}T01:00:00Z` },
     { sort: 'timestamp' },
   );
   assert.equal(total, 4); // 00:00, 00:15, 00:30, 00:45; 01:00 is excluded
-  assert.equal(items[0].timestamp, '2026-10-01T00:00:00Z');
+  assert.equal(items[0].timestamp, `${DAY}T00:00:00Z`);
 });
 
 test('readings.findMany with no installations matches nothing', async () => {
