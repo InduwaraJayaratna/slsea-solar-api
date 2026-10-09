@@ -1,9 +1,12 @@
 # slsea-solar-api
 
+| Module  | NB6007CEM Web API Development |
+| ------- | ----------------------------- |
+| Student | Induwara Jayaratna            |
+| Index   | COBSCCOMP251P-017 (NIBM)      |
+
 REST API for the Sri Lanka Sustainable Energy Authority (SLSEA): real-time and
 historical solar generation data from rooftop installations.
-
-Coursework for NB6007CEM Web API Development.
 
 ## Live API
 
