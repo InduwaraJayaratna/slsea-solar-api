@@ -12,7 +12,7 @@ Date: 2026-10-06
 Prompt:
 
 ```text
-You are helping me build my NB6007CEM Web API Development coursework: a REST API called slsea-solar-api for the Sri Lanka Sustainable Energy Authority (real-time and historical solar generation data from rooftop installations). Read everything in docs/reference/ first: the coursework brief, and the REST API Design Guidelines white paper if it is there. The white paper is the design authority. Where it conflicts with anything I ask in this or later prompts, tell me and follow the white paper.
+You are helping me build my Application for the Sri Lanka Sustainable Energy Authority (real-time and historical solar generation data from rooftop installations). Read everything in docs/reference/ first: the coursework brief, and the REST API Design Guidelines white paper if it is there. The white paper is the design authority. Where it conflicts with anything I ask in this or later prompts, tell me and follow the white paper.
 
 In this step do project setup only. Do not write any API code yet.
 
@@ -385,3 +385,33 @@ Summary of what was generated:
 - `src/lambda.js` (serverless-http around the unchanged Express app, awaiting the cached MongoDB connection, 503 when the database is down, base64 for binary assets), a SAM `template.yaml` (Lambda + HTTP API `$default` stage, catch-all route, CORS, NoEcho secrets, outputs) and a secret-free `samconfig.toml`.
 - `npm run deploy` (reads `.env` without echoing, builds, checks the package excludes data/tests/scripts, deploys), `logs` and `destroy`; `"files"` in package.json keeps the package to `src/` and `docs/openapi.yaml`; 5 Lambda handler tests (192 in total).
 - `docs/deployment.md` (Mermaid architecture, commands, variables, logs, known limits). The live deploy was not run: the AWS and SAM CLIs were not installed on the machine; the packaged handler was verified locally against Atlas instead.
+
+## Step 12 - Verification and release
+
+Date: 2026-10-09
+
+Prompt:
+
+```text
+Step 12 - Final verification and release.
+
+1. Re-generate the seed so the week of readings ends now (npm run seed:generate), validate it, and re-run npm run seed:mongo against Atlas. Commit the refreshed seed files.
+
+2. Run the full check and fix anything that fails: lint, tests, docs:lint, and the smoke script against the live URL.
+
+3. Write docs/coverage-map.md from the brief's Appendix A: one row per capability (data model precedes design; resource taxonomy atomic / collection / composite / processing; URI naming and scoped collections; JSON representation; HTTP methods and idempotency; headers Location, ETag, Last-Modified, Content-Type; status codes 201, 200, 404, 400, 406, 412; pagination, filtering, sorting; conditional GET; consistent error contract; authentication and scopes; Richardson maturity placement). For each row give the endpoint that demonstrates it, the file that implements it, and a curl command against the live URL that proves it. Run every curl command and record the actual status code.
+
+4. Finish README.md: live URLs, quick start (local memory mode and local MongoDB mode), environment variables, npm scripts, project structure, endpoint table, pointer to the demo credentials, and how to deploy.
+
+5. Check the repository is clean: no secrets anywhere in the Git history (search for the Mongo URI and the JWT secret), .env ignored, no unused files or dependencies, and docs/ai-prompts.md contains all 12 steps.
+
+6. After the final merge into main, tag v1.0.0 on main and push the tag.
+
+Then do the step wrap-up as Step 12 - Verification and release. For the explanation, give me a file-by-file tour of the repository that I can use to prepare for the viva.
+```
+
+Summary of what was generated:
+
+- Refreshed the seed (window ends 2026-10-09T03:00Z) and re-seeded Atlas; the 7 tests that had hard-coded dates now read the window from the seed (passing against three different seed windows). The Step 11 deployment (made by the user once the AWS CLI was configured) passed all 8 live smoke checks.
+- `docs/coverage-map.md`: the 12 Appendix A capabilities, each with its endpoint, implementing file and a live curl command, all run and recorded; the README finished with live URLs, quick start, scripts and structure.
+- Repository checks: none of the Mongo URI, its password or host, or the JWT secret occurs in any of the 132 commits; `.env` is ignored; every dependency is used (Prettier now has `format` scripts); this log covers Steps 1 to 12.
